@@ -1,0 +1,376 @@
+<section class="dashboard-shell">
+    <div class="bg-glow glow-1"></div>
+    <div class="bg-glow glow-2"></div>
+    <div class="bg-pattern"></div>
+
+    <header class="topbar">
+        <div class="topbar-left">
+            <div class="welcome-badge">
+                <span class="welcome-dot"></span>
+                <span>Monitoreo inteligente activo</span>
+            </div>
+
+            <h1>Dashboard de detección de rostros y género</h1>
+
+            <p class="topbar-subtitle">
+                Visualiza la cámara en vivo, analiza el flujo de personas por día
+                y consulta la distribución por género desde una interfaz premium y ordenada.
+            </p>
+        </div>
+
+        <div class="topbar-right">
+            <div class="overview-card">
+                <div class="overview-copy">
+                    <strong>Panel de rendimiento visual</strong>
+                    <p>Vista ejecutiva con métricas, actividad diaria y monitoreo en tiempo real.</p>
+                </div>
+
+                <div class="overview-brand">
+                    <span>FaceMonitor</span>
+                    <strong>2026</strong>
+                </div>
+            </div>
+
+            <div class="topbar-actions">
+                <div class="live-status">
+                    <div class="live-status-row">
+                        <span class="live-dot"></span>
+                        <span>Actualización en tiempo real</span>
+                    </div>
+
+                    <small *ngIf="ultimaActualizacion()">
+                        Última actualización: {{ ultimaActualizacion() }}
+                    </small>
+                </div>
+
+                <button type="button" class="refresh-btn" (click)="cargarDatos()">
+                    <span>↻</span>
+                    <span>Actualizar</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <section class="state-card" *ngIf="cargando()">
+        <div class="state-icon spinner"></div>
+        <div>
+            <strong>Cargando estadísticas...</strong>
+            <p>Consultando los datos registrados por la API.</p>
+        </div>
+    </section>
+
+    <section class="state-card error" *ngIf="!cargando() && error()">
+        <div class="state-icon error-icon">!</div>
+        <div>
+            <strong>Error al cargar datos</strong>
+            <p>{{ error() }}</p>
+        </div>
+    </section>
+
+    <ng-container *ngIf="!cargando() && !error() && data() as dashboard">
+        <section class="summary-grid">
+            <article class="main-income-card">
+                <div class="card-label">Resumen principal</div>
+
+                <div class="income-value">{{ dashboard.totales.personas }}</div>
+
+                <div class="income-meta">
+                    <span>Total de personas detectadas</span>
+                    <strong>
+                        {{
+                        dashboard.totales.eventos > 0
+                        ? '+' + (dashboard.totales.personas / dashboard.totales.eventos).toFixed(1)
+                        : '+0'
+                        }}
+                        por evento
+                    </strong>
+                </div>
+            </article>
+
+            <article class="quick-stat-card">
+                <div class="quick-stat-head">
+                    <span class="quick-icon">◎</span>
+                    <span>Promedio por evento</span>
+                </div>
+                <strong>{{ promedioPorEvento() }}</strong>
+                <small>Personas por evento</small>
+            </article>
+
+            <article class="quick-stat-card blue">
+                <div class="quick-stat-head">
+                    <span class="quick-icon">♂</span>
+                    <span>Hombres</span>
+                </div>
+                <div class="gender-hero">
+                    <img src="/man.svg" alt="Icono masculino">
+                </div>
+                <strong>{{ dashboard.totales.hombres }}</strong>
+                <small>{{ porcentajeHombres() }}% del total</small>
+            </article>
+
+            <article class="quick-stat-card pink">
+                <div class="quick-stat-head">
+                    <span class="quick-icon">♀</span>
+                    <span>Mujeres</span>
+                </div>
+                <div class="gender-hero">
+                    <img src="/woman.svg" alt="Icono femenino">
+                </div>
+                <strong>{{ dashboard.totales.mujeres }}</strong>
+                <small>{{ porcentajeMujeres() }}% del total</small>
+            </article>
+        </section>
+
+        <section class="main-grid">
+            <article class="camera-column">
+                <section class="panel camera-panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="panel-tag">Live stream</p>
+                            <h2>Cámara en vivo</h2>
+                            <p>Transmisión directa desde tu API FastAPI.</p>
+                        </div>
+
+                        <span class="live-badge">EN VIVO</span>
+                    </div>
+
+                    <div class="camera-frame">
+                        <div class="camera-topbar">
+                            <div class="camera-chip">
+                                <span class="camera-chip-dot"></span>
+                                <span>Canal principal</span>
+                            </div>
+
+                            <div class="camera-chip soft">
+                                {{ ultimaActualizacion() || '--:--:--' }}
+                            </div>
+                        </div>
+
+                        <img [src]="videoUrl" alt="Cámara en vivo">
+                    </div>
+                </section>
+
+                <section class="bottom-left-grid">
+                    <article class="panel notes-panel">
+                        <div class="panel-header compact">
+                            <div>
+                                <p class="panel-tag">Insights</p>
+                                <h2>Notas del sistema</h2>
+                            </div>
+                        </div>
+
+                        <ul class="notes-list">
+                            <li>
+                                Eventos totales:
+                                <strong>{{ dashboard.totales.eventos }}</strong>
+                            </li>
+                            <li>
+                                Promedio por evento:
+                                <strong>{{ promedioPorEvento() }}</strong>
+                            </li>
+                            <li>
+                                Participación masculina:
+                                <strong>{{ porcentajeHombres() }}%</strong>
+                            </li>
+                            <li>
+                                Participación femenina:
+                                <strong>{{ porcentajeMujeres() }}%</strong>
+                            </li>
+                            <li>
+                                Último refresco:
+                                <strong>{{ ultimaActualizacion() || '--:--:--' }}</strong>
+                            </li>
+                        </ul>
+                    </article>
+
+                    <article class="panel mini-team-panel">
+                        <div class="panel-header compact">
+                            <div>
+                                <p class="panel-tag">Resumen rápido</p>
+                                <h2>Métricas clave</h2>
+                            </div>
+                        </div>
+
+                        <div class="mini-kpi-grid">
+                            <div class="mini-kpi">
+                                <span>Eventos</span>
+                                <strong>{{ dashboard.totales.eventos }}</strong>
+                            </div>
+                            <div class="mini-kpi">
+                                <span>Personas</span>
+                                <strong>{{ dashboard.totales.personas }}</strong>
+                            </div>
+                            <div class="mini-kpi">
+                                <span>Hombres</span>
+                                <strong>{{ dashboard.totales.hombres }}</strong>
+                            </div>
+                            <div class="mini-kpi">
+                                <span>Mujeres</span>
+                                <strong>{{ dashboard.totales.mujeres }}</strong>
+                            </div>
+                        </div>
+                    </article>
+                </section>
+            </article>
+
+            <aside class="analytics-column">
+                <article class="panel donut-panel">
+                    <div class="panel-header compact">
+                        <div>
+                            <p class="panel-tag">Gender split</p>
+                            <h2>Distribución general</h2>
+                        </div>
+                    </div>
+
+                    <div class="donut-wrap">
+                        <div class="fake-donut" [style.--men]="porcentajeHombres()"
+                            [style.--women]="porcentajeMujeres()">
+                        </div>
+
+                        <div class="donut-legend">
+                            <div class="legend-row">
+                                <span class="legend-dot men"></span>
+                                <div>
+                                    <span>Hombres</span>
+                                    <strong>{{ dashboard.totales.hombres }}</strong>
+                                </div>
+                                <b>{{ porcentajeHombres() }}%</b>
+                            </div>
+
+                            <div class="legend-row">
+                                <span class="legend-dot women"></span>
+                                <div>
+                                    <span>Mujeres</span>
+                                    <strong>{{ dashboard.totales.mujeres }}</strong>
+                                </div>
+                                <b>{{ porcentajeMujeres() }}%</b>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel activity-panel">
+                    <div class="panel-header compact">
+                        <div>
+                            <p class="panel-tag">Daily trend</p>
+                            <h2>Personas por día</h2>
+                        </div>
+                    </div>
+
+                    <div class="bars-wrap">
+                        <div class="bar-row" *ngFor="let item of paginaPorDia(); trackBy: trackByFecha">
+                            <div class="bar-row-top">
+                                <span>{{ item.fecha }}</span>
+                                <strong>{{ item.personas }}</strong>
+                            </div>
+
+                            <div class="bar-track">
+                                <div class="bar-fill" [style.width.%]="porcentajeBarra(item.personas)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pagination-controls" *ngIf="totalPages() > 1">
+                        <span class="pagination-summary">
+                            Página {{ currentPage() }} de {{ totalPages() }}
+                        </span>
+                        <div class="pagination-actions">
+                            <button type="button" (click)="prevPage()" [disabled]="currentPage() === 1">
+                                ← Anterior
+                            </button>
+                            <button type="button" (click)="nextPage()" [disabled]="currentPage() === totalPages()">
+                                Siguiente →
+                            </button>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel breakdown-panel">
+                    <div class="panel-header compact">
+                        <div>
+                            <p class="panel-tag">Breakdown</p>
+                            <h2>Distribución por género</h2>
+                        </div>
+                    </div>
+
+                    <div class="breakdown-grid">
+                        <div class="breakdown-card men-card">
+                            <div class="breakdown-top">
+                                <h3>Hombres</h3>
+                                <strong>{{ porcentajeHombres() }}%</strong>
+                            </div>
+
+                            <div class="progress-track">
+                                <div class="progress-fill men-fill" [style.width.%]="porcentajeHombres()"></div>
+                            </div>
+
+                            <small>Total: {{ dashboard.totales.hombres }}</small>
+                        </div>
+
+                        <div class="breakdown-card women-card">
+                            <div class="breakdown-top">
+                                <h3>Mujeres</h3>
+                                <strong>{{ porcentajeMujeres() }}%</strong>
+                            </div>
+
+                            <div class="progress-track">
+                                <div class="progress-fill women-fill" [style.width.%]="porcentajeMujeres()"></div>
+                            </div>
+
+                            <small>Total: {{ dashboard.totales.mujeres }}</small>
+                        </div>
+                    </div>
+                </article>
+            </aside>
+        </section>
+
+        <section class="table-section">
+            <article class="panel table-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-tag">Historical data</p>
+                        <h2>Resumen por día</h2>
+                        <p>Eventos, personas y distribución diaria registrada.</p>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Eventos</th>
+                                <th>Personas</th>
+                                <th>Hombres</th>
+                                <th>Mujeres</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr *ngFor="let item of tablaPorDia(); trackBy: trackByFecha">
+                                <td>{{ item.fecha }}</td>
+                                <td>{{ item.eventos }}</td>
+                                <td>{{ item.personas }}</td>
+                                <td>{{ item.hombres }}</td>
+                                <td>{{ item.mujeres }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pagination-controls" *ngIf="totalTablePages() > 1">
+                    <span class="pagination-summary">
+                        Página {{ currentTablePage() }} de {{ totalTablePages() }}
+                    </span>
+                    <div class="pagination-actions">
+                        <button type="button" (click)="prevTablePage()" [disabled]="currentTablePage() === 1">
+                            ← Anterior
+                        </button>
+                        <button type="button" (click)="nextTablePage()" [disabled]="currentTablePage() === totalTablePages()">
+                            Siguiente →
+                        </button>
+                    </div>
+                </div>
+            </article>
+        </section>
+    </ng-container>
+</section>

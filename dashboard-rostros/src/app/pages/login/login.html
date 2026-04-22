@@ -1,0 +1,208 @@
+<section class="login-page">
+    <div class="login-shell" [class.register-mode]="modoRegistro()">
+        <div class="browser-bar">
+            <div class="browser-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+
+            <div class="browser-address" aria-hidden="true"></div>
+
+            <div class="browser-actions">
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+
+        <div class="content-shell">
+            <div class="forms-shell">
+                <!-- INICIAR SESIÓN -->
+                <section class="form-panel signin-panel">
+                    <form class="auth-form" (ngSubmit)="iniciarSesion()">
+                        <div class="form-copy">
+                            <h1>¡Bienvenido de nuevo!</h1>
+                            <p>
+                                Accede a tu sistema y continúa con el monitoreo,
+                                análisis y gestión visual en tiempo real.
+                            </p>
+                        </div>
+
+                        <div class="fields">
+                            <div class="input-shell">
+                                <input type="text" name="usuarioLogin" placeholder="Usuario" [ngModel]="usuarioLogin()"
+                                    (ngModelChange)="usuarioLogin.set($event)" />
+                            </div>
+
+                            <div class="input-shell password-shell">
+                                <input [type]="mostrarPasswordLogin() ? 'text' : 'password'" name="passwordLogin"
+                                    placeholder="Contraseña" [ngModel]="passwordLogin()"
+                                    (ngModelChange)="passwordLogin.set($event)" />
+
+                                <button type="button" class="password-toggle icon-toggle"
+                                    (click)="togglePasswordLogin()"
+                                    [attr.aria-label]="mostrarPasswordLogin() ? 'Ocultar contraseña' : 'Mostrar contraseña'">
+
+                                    <svg *ngIf="!mostrarPasswordLogin()" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2">
+                                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                                        <circle cx="12" cy="12" r="3" />
+                                    </svg>
+
+                                    <svg *ngIf="mostrarPasswordLogin()" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2">
+                                        <path d="M3 3l18 18" />
+                                        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                                        <path
+                                            d="M9.88 5.09A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.04 3.81" />
+                                        <path
+                                            d="M6.61 6.61C4.06 8.34 2 12 2 12s3.5 7 10 7a10.94 10.94 0 0 0 4.12-.79" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <a href="#" class="forgot-link">¿Olvidaste tu contraseña?</a>
+
+                        <button type="submit" class="primary-btn" [disabled]="cargando()">
+                            {{ cargando() ? 'Ingresando...' : 'Iniciar sesión' }}
+                        </button>
+
+                        <div class="divider">
+                            <span>o continúa con</span>
+                        </div>
+
+                        <div class="social-row">
+                            <button type="button" class="social-btn">G</button>
+                            <button type="button" class="social-btn"></button>
+                            <button type="button" class="social-btn">f</button>
+                        </div>
+
+                        <p class="switch-line">
+                            ¿No tienes cuenta?
+                            <button type="button" (click)="activarRegistro()">Crear cuenta</button>
+                        </p>
+                    </form>
+                </section>
+
+                <!-- CREAR CUENTA -->
+                <section class="form-panel signup-panel">
+                    <form class="auth-form" (ngSubmit)="registrar()">
+                        <div class="form-copy">
+                            <h1>Crear cuenta</h1>
+                            <p>
+                                Regístrate para comenzar a usar el panel,
+                                administrar accesos y centralizar tus datos.
+                            </p>
+                        </div>
+
+                        <div class="fields">
+                            <div class="input-shell">
+                                <input type="text" name="nombreRegistro" placeholder="Nombre completo"
+                                    [ngModel]="nombreRegistro()" (ngModelChange)="nombreRegistro.set($event)" />
+                            </div>
+
+                            <div class="input-shell">
+                                <input type="email" name="correoRegistro" placeholder="Correo electrónico"
+                                    [ngModel]="correoRegistro()" (ngModelChange)="correoRegistro.set($event)" />
+                            </div>
+
+                            <div class="input-shell password-shell">
+                                <input [type]="mostrarPasswordRegistro() ? 'text' : 'password'" name="passwordRegistro"
+                                    placeholder="Crea tu contraseña" [ngModel]="passwordRegistro()"
+                                    (ngModelChange)="passwordRegistro.set($event)" />
+
+                                <button type="button" class="password-toggle icon-toggle"
+                                    (click)="togglePasswordRegistro()"
+                                    [attr.aria-label]="mostrarPasswordRegistro() ? 'Ocultar contraseña' : 'Mostrar contraseña'">
+
+                                    <svg *ngIf="!mostrarPasswordRegistro()" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2">
+                                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                                        <circle cx="12" cy="12" r="3" />
+                                    </svg>
+
+                                    <svg *ngIf="mostrarPasswordRegistro()" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2">
+                                        <path d="M3 3l18 18" />
+                                        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                                        <path
+                                            d="M9.88 5.09A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.04 3.81" />
+                                        <path
+                                            d="M6.61 6.61C4.06 8.34 2 12 2 12s3.5 7 10 7a10.94 10.94 0 0 0 4.12-.79" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="primary-btn secondary" [disabled]="cargando()">
+                            {{ cargando() ? 'Creando...' : 'Crear cuenta' }}
+                        </button>
+
+                        <div class="divider">
+                            <span>o continúa con</span>
+                        </div>
+
+                        <div class="social-row">
+                            <button type="button" class="social-btn">G</button>
+                            <button type="button" class="social-btn"></button>
+                            <button type="button" class="social-btn">f</button>
+                        </div>
+
+                        <p class="switch-line">
+                            ¿Ya tienes una cuenta?
+                            <button type="button" (click)="activarLogin()">Inicia sesión</button>
+                        </p>
+                    </form>
+                </section>
+            </div>
+
+            <div class="visual-shell">
+                <div class="visual-track">
+                    <!-- VISUAL LOGIN -->
+                    <section class="visual-panel login-visual">
+                        <div class="visual-card">
+                            <div class="image-stage">
+                                <img src="./Deteccion-Facial.png" alt="Detección facial">
+
+                                <div class="floating-chip chip-b">
+                                    <strong>84%</strong>
+                                    <span>Precisión estimada</span>
+                                </div>
+
+                                <div class="floating-chip chip-a">
+                                    <strong>Detección facial</strong>
+                                    <span>Monitoreo visual activo</span>
+                                </div>
+                            </div>
+
+                            <div class="visual-text">
+                                <h2>Detección inteligente de rostros</h2>
+                                <p>con FaceMonitor</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- VISUAL REGISTRO -->
+                    <section class="visual-panel signup-visual">
+                        <div class="register-hero">
+                            <div class="register-badge">Nueva cuenta</div>
+                            <h2>Únete a la plataforma</h2>
+                            <p>
+                                Crea tu cuenta para acceder al monitoreo inteligente,
+                                datos centralizados y una experiencia premium del sistema.
+                            </p>
+
+                            <button type="button" class="ghost-btn" (click)="activarLogin()">
+                                Volver al inicio de sesión
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Figura cuadrada: azul → rojo al hover -->
+    <div class="hover-square"></div>
+</section>
