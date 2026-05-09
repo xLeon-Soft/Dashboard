@@ -1,0 +1,249 @@
+<div class="page-shell">
+  <div class="page-wrapper">
+
+    <!-- ─── HEADER ──────────────────────────── -->
+    <header class="page-header">
+      <div class="header-left">
+        <span class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Registro de Datos
+        </span>
+        <h1>Historial Completo de Detecciones</h1>
+        <p>Tabla detallada con todos los registros capturados. Filtra, busca y descarga los datos.</p>
+      </div>
+
+      <div class="header-actions">
+        <!-- Notifications -->
+        <div class="notif-wrapper">
+          <button class="notif-btn" (click)="toggleNotifs()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <span *ngIf="notificacionesPendientes() > 0" class="notif-badge">{{ notificacionesPendientes() }}</span>
+          </button>
+
+          <!-- Dropdown -->
+          <div *ngIf="mostrarNotifs()" class="notif-panel">
+            <div class="notif-header">
+              <h4>Notificaciones</h4>
+              <button class="mark-read-btn" (click)="marcarLeidas()">Marcar todas leídas</button>
+            </div>
+            <div *ngIf="notificaciones().length === 0" class="notif-empty">
+              Sin notificaciones recientes
+            </div>
+            <div class="notif-list" *ngIf="notificaciones().length > 0">
+              <div *ngFor="let n of notificaciones()" class="notif-item" [class.unread]="!n.leida" [class.notif-hombre]="n.tipo==='hombre'" [class.notif-mujer]="n.tipo==='mujer'" [class.notif-alerta]="n.tipo==='alerta'">
+                <div class="notif-icon">
+                  <img *ngIf="n.tipo === 'hombre'" src="/hombre.png" alt="H">
+                  <img *ngIf="n.tipo === 'mujer'" src="/mujer.png" alt="M">
+                  <svg *ngIf="n.tipo === 'alerta'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </div>
+                <div class="notif-body">
+                  <span>{{ n.mensaje }}</span>
+                  <small>{{ n.tiempo }}</small>
+                </div>
+                <div *ngIf="!n.leida" class="unread-dot"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Download -->
+        <button class="download-btn" (click)="descargarCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Descargar CSV
+        </button>
+      </div>
+    </header>
+
+    <div *ngIf="cargando()" class="state-panel loading-panel">
+      <div class="spinner"></div> Cargando registros...
+    </div>
+    <div *ngIf="error()" class="state-panel error-panel">{{ error() }}</div>
+
+    <div *ngIf="!cargando() && !error()" class="page-grid">
+
+      <!-- ── KPI STATS ROW ─────────────────────────── -->
+      <section class="kpi-row">
+        <div class="kpi-card kpi-total">
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div>
+            <span>Total Personas</span>
+            <strong>{{ totalPersonas() | number }}</strong>
+            <small>{{ dias().length }} días registrados</small>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-hombres">
+          <div class="kpi-icon">
+            <img src="/hombre.png" alt="H" style="width:26px;filter:brightness(0) invert(1)">
+          </div>
+          <div>
+            <span>Total Hombres</span>
+            <strong>{{ totalHombres() | number }}</strong>
+            <small>{{ pctHombres() }}% del total</small>
+          </div>
+          <div class="kpi-progress">
+            <div class="kp-bar" [style.width.%]="pctHombres()"></div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-mujeres">
+          <div class="kpi-icon">
+            <img src="/mujer.png" alt="M" style="width:26px;filter:brightness(0) invert(1)">
+          </div>
+          <div>
+            <span>Total Mujeres</span>
+            <strong>{{ totalMujeres() | number }}</strong>
+            <small>{{ pctMujeres() }}% del total</small>
+          </div>
+          <div class="kpi-progress pink">
+            <div class="kp-bar" [style.width.%]="pctMujeres()"></div>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-eventos">
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <div>
+            <span>Total Eventos</span>
+            <strong>{{ totalEventos() | number }}</strong>
+            <small>Registros de actividad</small>
+          </div>
+        </div>
+
+        <div class="kpi-card kpi-ratio">
+          <div class="kpi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="ratio-content">
+            <span>Ratio H/M</span>
+            <div class="ratio-track">
+              <div class="rt-h" [style.width.%]="pctHombres()"></div>
+              <div class="rt-m" [style.flex]="1"></div>
+            </div>
+            <div class="ratio-labels">
+              <span class="rl-h">H {{ pctHombres() }}%</span>
+              <span class="rl-m">{{ pctMujeres() }}% M</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── TABLE SECTION ──────────────────────────── -->
+      <section class="table-section">
+        <!-- Toolbar -->
+        <div class="table-toolbar">
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input
+              type="text"
+              placeholder="Buscar por fecha..."
+              [value]="filtroBusqueda()"
+              (input)="onBusqueda($event)">
+          </div>
+          <div class="table-meta">
+            <span>{{ registrosFiltrados().length }} registros</span>
+            <span class="refresh-dot-pill">
+              <span class="rd"></span>En tiempo real
+            </span>
+          </div>
+        </div>
+
+        <!-- Table wrapper -->
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Fecha</th>
+                <th>Personas</th>
+                <th>Hombres</th>
+                <th>Mujeres</th>
+                <th>Eventos</th>
+                <th>% H</th>
+                <th>% M</th>
+                <th>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of registrosPagina(); let i = index">
+                <td class="td-num">{{ paginaActual() * POR_PAGINA + i + 1 }}</td>
+                <td class="td-fecha">
+                  <span class="fecha-badge">{{ row.fecha }}</span>
+                </td>
+                <td class="td-personas">{{ row.personas | number }}</td>
+                <td class="td-h">
+                  <div class="gender-cell">
+                    <img src="/hombre.png" alt="H" class="gc-icon">
+                    {{ row.hombres | number }}
+                  </div>
+                </td>
+                <td class="td-m">
+                  <div class="gender-cell">
+                    <img src="/mujer.png" alt="M" class="gc-icon">
+                    {{ row.mujeres | number }}
+                  </div>
+                </td>
+                <td>{{ row.eventos | number }}</td>
+                <td>
+                  <span class="pct-badge pct-blue">
+                    {{ row.personas ? (row.hombres / row.personas * 100 | number:'1.0-0') : 0 }}%
+                  </span>
+                </td>
+                <td>
+                  <span class="pct-badge pct-pink">
+                    {{ row.personas ? (row.mujeres / row.personas * 100 | number:'1.0-0') : 0 }}%
+                  </span>
+                </td>
+                <td class="td-balance">
+                  <div class="balance-track">
+                    <div class="bt-h" [style.width.%]="row.personas ? (row.hombres / row.personas) * 100 : 50"></div>
+                    <div class="bt-m" [style.flex]="1"></div>
+                  </div>
+                </td>
+              </tr>
+
+              <tr *ngIf="registrosPagina().length === 0">
+                <td colspan="9" class="empty-row">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
+                  No hay registros que coincidan con la búsqueda
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination-bar" *ngIf="totalPaginas() > 1">
+          <button class="pag-btn" [disabled]="paginaActual() === 0" (click)="paginaAnterior()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+
+          <button
+            *ngFor="let p of paginasRange()"
+            class="pag-num"
+            [class.active]="p === paginaActual()"
+            (click)="irPagina(p)">
+            {{ p + 1 }}
+          </button>
+
+          <button class="pag-btn" [disabled]="paginaActual() >= totalPaginas() - 1" (click)="paginaSiguiente()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+
+          <span class="pag-info">{{ paginaActual() + 1 }} de {{ totalPaginas() }} páginas · {{ registrosFiltrados().length }} registros</span>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>

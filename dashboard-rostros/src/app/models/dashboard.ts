@@ -13,7 +13,17 @@ export interface ResumenPorDia {
   mujeres: number;
 }
 
+export interface RegistroDetalle {
+  id?: number;
+  fecha: string;
+  hora?: string;
+  genero: string;
+  confianza?: number;
+  camara?: string;
+}
+
 export interface DashboardResponse {
   totales: Totales;
   por_dia: ResumenPorDia[];
+  registros?: RegistroDetalle[];
 }

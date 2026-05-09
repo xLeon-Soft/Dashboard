@@ -11,13 +11,41 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from openpyxl import Workbook, load_workbook
+import sqlite3
+from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, status
+from auth import (
+    get_password_hash, 
+    verify_password, 
+    create_access_token, 
+    create_refresh_token, 
+    decode_token
+)
+import random
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+
+# =========================
+# GOOGLE OAUTH CONFIG
+# =========================
+GOOGLE_CLIENT_ID = "158844941712-ur7qfnon9j69tg1vkobfdbip5a4ujm0e.apps.googleusercontent.com"
 
 app = FastAPI()
 
 # =========================
 # CONFIGURACION GENERAL
 # =========================
+# Opciones: "IP" o "LOCAL"
+CAMERA_TYPE = "LOCAL" 
+# URL para DroidCam (si CAMERA_TYPE es "IP")
 DROIDCAM_URL = "http://192.168.1.75:4747/video"
+# Índice de cámara (si CAMERA_TYPE es "LOCAL")
+# 0 suele ser la cámara de la laptop, 1 o más suelen ser cámaras USB
+CAMERA_INDEX = 0
+
 LUGAR = "Libreria Leon"
 SAVE_COOLDOWN_SECONDS = 5
 
@@ -65,13 +93,187 @@ gender_net = None
 
 stable_faces = []
 face_memory = {}
-FACE_STABILITY_FRAMES = 3
-FACE_MATCH_DISTANCE = 70
+FACE_STABILITY_FRAMES = 5
+FACE_MATCH_DISTANCE = 50
 FRAME_TIMEOUT_SECONDS = 3.0
 
 net_lock = threading.Lock()
 excel_lock = threading.Lock()
 state_lock = threading.Lock()
+
+# =========================
+# CONFIGURACION AUTH
+# =========================
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+DB_FILE = os.path.join(BASE_DIR, "users.db")
+# =========================
+# CONFIGURACION EMAIL (SMTP)
+# =========================
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_USER = os.getenv("SMTP_USER", "alexander2004deleon@gmail.com")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "rgpm vvez pczr nmbz")
+
+def send_2fa_email(target_email: str, code: str):
+    """Envía el código 2FA por correo electrónico."""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USER
+        msg['To'] = target_email
+        msg['Subject'] = f"Tu código de acceso - {LUGAR}"
+
+        body = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 20px;">
+                <h2 style="color: #2563eb;">Verificación de Seguridad</h2>
+                <p>Has intentado iniciar sesión en <strong>{LUGAR}</strong>.</p>
+                <p>Tu código de verificación de 6 dígitos es:</p>
+                <div style="background: #f3f4f6; padding: 20px; border-radius: 10px; display: inline-block; font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #111827; margin: 20px 0;">
+                    {code}
+                </div>
+                <p style="color: #6b7280; font-size: 14px;">Este código expirará en 5 minutos.</p>
+                <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">Si no solicitaste este código, puedes ignorar este correo.</p>
+            </body>
+        </html>
+        """
+        msg.attach(MIMEText(body, 'html'))
+
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+        
+        print(f"Correo enviado exitosamente a {target_email}")
+        return True
+    except Exception as e:
+        print(f"Error enviando correo: {e}")
+        return False
+
+def send_reset_password_email(target_email: str, code: str):
+    """Envía el código de recuperación de contraseña por correo electrónico."""
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = SMTP_USER
+        msg['To'] = target_email
+        msg['Subject'] = f"Recuperar contraseña - {LUGAR}"
+
+        body = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 20px;">
+                <h2 style="color: #ef4444;">Recuperación de Contraseña</h2>
+                <p>Has solicitado restablecer tu contraseña en <strong>{LUGAR}</strong>.</p>
+                <p>Tu código de recuperación es:</p>
+                <div style="background: #fef2f2; padding: 20px; border-radius: 10px; display: inline-block; font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #b91c1c; margin: 20px 0;">
+                    {code}
+                </div>
+                <p style="color: #6b7280; font-size: 14px;">Este código expirará en <strong>1 minuto</strong>.</p>
+                <p style="color: #6b7280; font-size: 12px; margin-top: 40px;">Si no solicitaste este cambio, puedes ignorar este correo con seguridad.</p>
+            </body>
+        </html>
+        """
+        msg.attach(MIMEText(body, 'html'))
+
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+        
+        return True
+    except Exception as e:
+        print(f"Error enviando correo de recuperación: {e}")
+        return False
+
+pending_2fa = {} # {username: {"code": "123456", "expires": timestamp}}
+pending_reset = {} # {email: {"code": "123456", "expires": timestamp}}
+
+@app.post("/auth/forgot-password")
+def forgot_password(data: dict):
+    email = data.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="El correo es requerido")
+
+    # Verificar si el usuario existe
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+    user = cursor.fetchone()
+    conn.close()
+
+    if not user:
+        # Por seguridad, no revelamos si el correo existe o no, pero aquí 
+        # para facilidad del usuario devolveremos un error claro
+        raise HTTPException(status_code=404, detail="No existe un usuario con ese correo")
+
+    # Generar código de recuperación
+    code = f"{random.randint(10000, 99999)}"
+    pending_reset[email] = {
+        "code": code,
+        "expires": time.time() + 60  # 1 minuto
+    }
+
+    # Enviar correo
+    sent = send_reset_password_email(email, code)
+    if not sent:
+        raise HTTPException(status_code=500, detail="Error al enviar el correo")
+
+    return {"message": "Código de recuperación enviado"}
+
+@app.post("/auth/reset-password")
+def reset_password(data: dict):
+    email = data.get("email")
+    code = data.get("code")
+    new_password = data.get("password")
+
+    if not email or not code or not new_password:
+        raise HTTPException(status_code=400, detail="Faltan datos")
+
+    if email not in pending_reset:
+        raise HTTPException(status_code=400, detail="No se ha solicitado recuperación para este correo")
+
+    reset_info = pending_reset[email]
+    if time.time() > reset_info["expires"]:
+        del pending_reset[email]
+        raise HTTPException(status_code=400, detail="El código ha expirado")
+
+    if reset_info["code"] != code:
+        raise HTTPException(status_code=400, detail="El código es incorrecto")
+
+    # Actualizar contraseña
+    hashed_pw = get_password_hash(new_password)
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET password = ? WHERE email = ?", (hashed_pw, email))
+    conn.commit()
+    conn.close()
+
+    # Limpiar código usado
+    del pending_reset[email]
+
+    return {"message": "Contraseña actualizada correctamente"}
+
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    payload = decode_token(token)
+    if not payload or "sub" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido o expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return payload["sub"]
 
 
 # =========================
@@ -215,112 +417,130 @@ def read_excel_rows():
 
 
 # =========================
-# DROIDCAM
+# CAMERA READER (IP & LOCAL)
 # =========================
-def droidcam_reader():
+def camera_reader():
     global latest_frame, running, last_frame_received_time
 
     while running:
-        session = None
-        stream = None
+        if CAMERA_TYPE == "IP":
+            # Lógica para DroidCam (Stream HTTP)
+            session = None
+            stream = None
+            try:
+                print(f"Intentando conectar a Cámara IP: {DROIDCAM_URL}")
+                session = requests.Session()
+                session.headers.update({
+                    "Connection": "close",
+                    "User-Agent": "Python-DroidCam-Client"
+                })
+                stream = session.get(DROIDCAM_URL, stream=True, timeout=(5, 5))
 
-        try:
-            print("Intentando conectar a DroidCam...")
+                if stream.status_code != 200:
+                    print(f"Error conectando a Cámara IP: HTTP {stream.status_code}")
+                    with frame_lock:
+                        latest_frame = None
+                    time.sleep(2)
+                    continue
 
-            session = requests.Session()
-            session.headers.update({
-                "Connection": "close",
-                "User-Agent": "Python-DroidCam-Client"
-            })
+                print("Conectado a Cámara IP correctamente.")
+                bytes_data = b""
+                last_chunk_time = time.time()
 
-            stream = session.get(
-                DROIDCAM_URL,
-                stream=True,
-                timeout=(5, 5)
-            )
+                for chunk in stream.iter_content(chunk_size=4096):
+                    if not running or CAMERA_TYPE != "IP":
+                        break
 
-            if stream.status_code != 200:
-                print(f"Error conectando a DroidCam: HTTP {stream.status_code}")
+                    now = time.time()
+                    if now - last_chunk_time > FRAME_TIMEOUT_SECONDS:
+                        print("Timeout de frames detectado. Reconectando...")
+                        break
+
+                    if not chunk:
+                        time.sleep(0.01)
+                        continue
+
+                    last_chunk_time = now
+                    bytes_data += chunk
+                    a = bytes_data.find(b"\xff\xd8")
+                    b = bytes_data.find(b"\xff\xd9")
+
+                    if a != -1 and b != -1 and b > a:
+                        jpg = bytes_data[a:b + 2]
+                        bytes_data = bytes_data[b + 2:]
+                        frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+                        if frame is not None:
+                            with frame_lock:
+                                latest_frame = frame
+                                last_frame_received_time = time.time()
+
+            except requests.exceptions.ConnectTimeout:
+                print(f"⚠️ Timeout: No se pudo conectar a {DROIDCAM_URL}. Verifica que DroidCam esté abierto y en la misma red.")
+                with frame_lock:
+                    latest_frame = None
+                time.sleep(5)
+            except requests.exceptions.ConnectionError:
+                print(f"❌ Error de conexión: No se pudo establecer vínculo con {DROIDCAM_URL}.")
+                with frame_lock:
+                    latest_frame = None
+                time.sleep(5)
+            except Exception as e:
+                print(f"Error en stream IP: {e}")
                 with frame_lock:
                     latest_frame = None
                 time.sleep(2)
-                continue
+            finally:
+                if stream: stream.close()
+                if session: session.close()
 
-            print("Conectado a DroidCam correctamente.")
-            bytes_data = b""
-            last_chunk_time = time.time()
+        else:
+            # Lógica para Cámara Local (USB o Laptop)
+            cap = None
+            try:
+                print(f"Intentando conectar a Cámara Local (Índice {CAMERA_INDEX})...")
+                cap = cv2.VideoCapture(CAMERA_INDEX)
+                
+                # Opcional: configurar resolución
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-            for chunk in stream.iter_content(chunk_size=4096):
-                if not running:
-                    break
-
-                now = time.time()
-
-                # si no entra data nueva, romper para reconectar
-                if now - last_chunk_time > FRAME_TIMEOUT_SECONDS:
-                    print("Timeout de frames detectado. Reconectando a DroidCam...")
-                    break
-
-                if not chunk:
-                    time.sleep(0.01)
+                if not cap.isOpened():
+                    print(f"No se pudo abrir la cámara local índice {CAMERA_INDEX}")
+                    with frame_lock:
+                        latest_frame = None
+                    time.sleep(2)
                     continue
 
-                last_chunk_time = now
-                bytes_data += chunk
+                print(f"Cámara Local {CAMERA_INDEX} conectada.")
+                
+                while running and CAMERA_TYPE == "LOCAL":
+                    ret, frame = cap.read()
+                    if not ret:
+                        print("Error leyendo frame de cámara local.")
+                        break
+                    
+                    with frame_lock:
+                        latest_frame = frame
+                        last_frame_received_time = time.time()
+                    
+                    # Pequeña pausa para no saturar el CPU
+                    time.sleep(0.01)
 
-                a = bytes_data.find(b"\xff\xd8")
-                b = bytes_data.find(b"\xff\xd9")
-
-                if a != -1 and b != -1 and b > a:
-                    jpg = bytes_data[a:b + 2]
-                    bytes_data = bytes_data[b + 2:]
-
-                    frame = cv2.imdecode(
-                        np.frombuffer(jpg, dtype=np.uint8),
-                        cv2.IMREAD_COLOR
-                    )
-
-                    if frame is not None:
-                        with frame_lock:
-                            latest_frame = frame
-                            last_frame_received_time = time.time()
-
-            with frame_lock:
-                if time.time() - last_frame_received_time > FRAME_TIMEOUT_SECONDS:
+            except Exception as e:
+                print(f"Error en cámara local: {e}")
+                with frame_lock:
                     latest_frame = None
+                time.sleep(2)
+            finally:
+                if cap:
+                    cap.release()
 
-            print("Reconectando stream de DroidCam...")
-            time.sleep(1)
-
-        except requests.exceptions.RequestException as e:
-            print("Error de conexión con DroidCam:", e)
-            with frame_lock:
-                latest_frame = None
-            time.sleep(2)
-
-        except Exception as e:
-            print("Error leyendo DroidCam:", e)
-            with frame_lock:
-                latest_frame = None
-            time.sleep(2)
-
-        finally:
-            if stream is not None:
-                try:
-                    stream.close()
-                except Exception:
-                    pass
-
-            if session is not None:
-                try:
-                    session.close()
-                except Exception:
-                    pass
+        time.sleep(1)
 
 # =========================
 # DETECCION DE ROSTROS
 # =========================
-def detectar_rostros_dnn(frame, conf_threshold=0.93):
+def detectar_rostros_dnn(frame, conf_threshold=0.85):
     global face_net
 
     if face_net is None:
@@ -329,7 +549,7 @@ def detectar_rostros_dnn(frame, conf_threshold=0.93):
     h, w = frame.shape[:2]
 
     # Ignorar una parte superior donde suelen salir techo, focos y reflejos
-    y_inicio = int(h * 0.28)
+    y_inicio = int(h * 0.10)
     roi = frame[y_inicio:h, 0:w]
     roi_h, roi_w = roi.shape[:2]
 
@@ -352,8 +572,8 @@ def detectar_rostros_dnn(frame, conf_threshold=0.93):
     boxes = []
     confidences = []
 
-    min_face_size = 120
-    max_face_size_ratio = 0.75
+    min_face_size = 30
+    max_face_size_ratio = 0.85
     margin_x = int(roi_w * 0.03)
     margin_y = int(roi_h * 0.03)
 
@@ -383,7 +603,7 @@ def detectar_rostros_dnn(frame, conf_threshold=0.93):
             continue
 
         aspect_ratio = box_w / float(box_h)
-        if aspect_ratio < 0.75 or aspect_ratio > 1.35:
+        if aspect_ratio < 0.60 or aspect_ratio > 1.50:
             continue
 
         if x1 < margin_x or y1 < margin_y or x2 > roi_w - margin_x or y2 > roi_h - margin_y:
@@ -405,7 +625,7 @@ def detectar_rostros_dnn(frame, conf_threshold=0.93):
             faces.append((x, y + y_inicio, bw, bh, conf))
 
     faces.sort(key=lambda item: item[4], reverse=True)
-    faces = faces[:3]
+    faces = faces[:5]
 
     return faces
 
@@ -503,7 +723,7 @@ def detect_faces_and_log(frame):
         else:
             genero, gender_conf = "No identificado", 0.0
 
-        if gender_conf < 0.60:
+        if gender_conf < 0.70:
             genero = "No identificado"
 
         faces_con_genero.append((x, y, w, h, face_conf, genero, gender_conf))
@@ -591,7 +811,7 @@ def generate_frames():
                 faces_to_draw = list(last_faces)
 
             for (x, y, w, h, face_conf, genero, gender_conf) in faces_to_draw:
-                if face_conf < 0.93:
+                if face_conf < 0.85:
                     continue
 
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
@@ -637,10 +857,10 @@ def generate_frames():
 
 
 # =========================
-# ESTADISTICAS PARA ANGULAR
+# ESTADISTICAS PARA ANGULAR (PROTEGIDAS)
 # =========================
 @app.get("/registros")
-def get_registros():
+def get_registros(current_user: str = Depends(get_current_user)):
     try:
         rows = read_excel_rows()
         return {
@@ -655,7 +875,7 @@ def get_registros():
 
 
 @app.get("/estadisticas")
-def get_estadisticas():
+def get_estadisticas(current_user: str = Depends(get_current_user)):
     try:
         rows = read_excel_rows()
 
@@ -737,13 +957,73 @@ def camera_status():
         "camera_online": disponible,
         "seconds_since_last_frame": segundos_sin_frames,
         "frame_timeout_seconds": FRAME_TIMEOUT_SECONDS,
-        "droidcam_url": DROIDCAM_URL
+        "camera_type": CAMERA_TYPE,
+        "droidcam_url": DROIDCAM_URL,
+        "camera_index": CAMERA_INDEX
+    }
+
+
+@app.post("/set-camera")
+def set_camera(data: dict):
+    global CAMERA_TYPE, CAMERA_INDEX, DROIDCAM_URL
+    
+    new_type = data.get("type") # "IP" o "LOCAL"
+    if new_type not in ["IP", "LOCAL"]:
+        raise HTTPException(status_code=400, detail="Tipo de cámara inválido. Use 'IP' o 'LOCAL'")
+    
+    CAMERA_TYPE = new_type
+    if "index" in data and data["index"] is not None:
+        CAMERA_INDEX = int(data["index"])
+    if "url" in data:
+        DROIDCAM_URL = data["url"]
+    
+    # Al cambiar el tipo, el hilo camera_reader detectará el cambio y reconectará
+    return {"message": f"Cámara cambiada a {CAMERA_TYPE}", "config": {
+        "type": CAMERA_TYPE,
+        "index": CAMERA_INDEX,
+        "url": DROIDCAM_URL
+    }}
+
+
+@app.get("/detecciones/activas")
+def get_detecciones_activas():
+    """
+    Devuelve las detecciones estables actuales en memoria.
+    No requiere autenticación (solo lectura del estado en RAM).
+    """
+    with state_lock:
+        faces = list(last_faces)
+
+    detecciones = []
+    for (x, y, w, h, face_conf, genero, gender_conf) in faces:
+        if face_conf < 0.85:
+            continue
+        if genero == "No identificado":
+            continue
+        detecciones.append({
+            "genero": genero,
+            "confianza_rostro": round(float(face_conf), 2),
+            "confianza_genero": round(float(gender_conf), 2),
+        })
+
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "detecciones": detecciones,
+        "total": len(detecciones),
     }
 
 
 # =========================
 # EVENTOS FASTAPI
 # =========================
+@app.get("/video_feed")
+def video_feed():
+    return StreamingResponse(
+        generate_frames(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
 @app.on_event("startup")
 def startup_event():
     print("====================================")
@@ -754,11 +1034,12 @@ def startup_event():
     print("Ruta Excel:", EXCEL_FILE)
     print("DROIDCAM_URL:", DROIDCAM_URL)
     print("====================================")
-
+    
+    init_db()
     init_excel()
     load_models()
 
-    thread_cam = threading.Thread(target=droidcam_reader, daemon=True)
+    thread_cam = threading.Thread(target=camera_reader, daemon=True)
     thread_cam.start()
 
     thread_detection = threading.Thread(target=detection_worker, daemon=True)
@@ -772,6 +1053,281 @@ def shutdown_event():
     global running
     running = False
     print("API detenida correctamente.")
+
+
+# =========================
+# AUTH ENDPOINTS
+# =========================
+@app.post("/auth/register")
+def register(data: dict):
+    username = data.get("username")
+    email = data.get("email")
+    password = data.get("password")
+
+    if not username or not email or not password:
+        raise HTTPException(status_code=400, detail="Faltan datos")
+
+    hashed_pw = get_password_hash(password)
+
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", (username, email, hashed_pw))
+        conn.commit()
+        conn.close()
+        return {"message": "Usuario creado correctamente"}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="El usuario o email ya existe")
+
+@app.post("/auth/login")
+def login(data: dict):
+    identifier = data.get("identifier") or data.get("username")
+    password   = data.get("password")
+
+    if not identifier or not password:
+        raise HTTPException(status_code=400, detail="Faltan datos")
+
+    conn   = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+
+    # Buscar por email o por username dependiendo del formato
+    if "@" in identifier:
+        cursor.execute(
+            "SELECT username, password, email FROM users WHERE email = ?",
+            (identifier,)
+        )
+    else:
+        cursor.execute(
+            "SELECT username, password, email FROM users WHERE username = ?",
+            (identifier,)
+        )
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row or not verify_password(password, row[1]):
+        raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+
+    username   = row[0]
+    user_email = row[2]
+
+    # Generar código 2FA
+    code = f"{random.randint(100000, 999999)}"
+    pending_2fa[username] = {
+        "code":    code,
+        "expires": time.time() + 300  # 5 minutos
+    }
+
+    # Enviar correo
+    email_sent = send_2fa_email(user_email, code)
+
+    print(f"DEBUG: Código 2FA para {username}: {code} (Email enviado: {email_sent})")
+
+    return {
+        "message":       "Código 2FA enviado al correo" if email_sent else "Error al enviar el correo (ver terminal)",
+        "username":      username,
+        "step":          "2fa",
+        "email_preview": f"{user_email[:3]}***@{user_email.split('@')[-1]}" if user_email else None
+    }
+
+
+@app.post("/auth/verify-2fa")
+def verify_2fa_code(data: dict):
+    username = data.get("username")
+    code = str(data.get("code", ""))
+
+    if username not in pending_2fa:
+        raise HTTPException(status_code=400, detail="No hay una sesión de 2FA activa")
+
+    saved_data = pending_2fa[username]
+    if time.time() > saved_data["expires"]:
+        del pending_2fa[username]
+        raise HTTPException(status_code=400, detail="Código expirado")
+
+    if saved_data["code"] != code:
+        raise HTTPException(status_code=400, detail="Código incorrecto")
+
+    # Limpiar y generar tokens
+    del pending_2fa[username]
+    
+    access_token = create_access_token(data={"sub": username})
+    refresh_token = create_refresh_token(data={"sub": username})
+
+    # Obtener el email del usuario para el perfil
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT email FROM users WHERE username = ?", (username,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    email = row[0] if row else ""
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "username": username,
+        "email": email,
+        "name": username,
+        "picture": f"https://ui-avatars.com/api/?name={username}&background=1e1e2c&color=c9a96e"
+    }
+
+
+@app.post("/auth/google")
+def google_login(data: dict):
+    """Autenticación con Google OAuth. Verifica el token de Google y devuelve JWT."""
+    credential = data.get("credential")
+    if not credential:
+        raise HTTPException(status_code=400, detail="Falta el token de Google")
+
+    try:
+        # Verificar el token de Google
+        idinfo = id_token.verify_oauth2_token(
+            credential,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID
+        )
+
+        # Extraer información del usuario de Google
+        google_email = idinfo.get("email")
+        google_name = idinfo.get("name", "")
+        google_picture = idinfo.get("picture", "")
+
+        if not google_email:
+            raise HTTPException(status_code=400, detail="No se pudo obtener el email de Google")
+
+        # Buscar si el usuario ya existe en la base de datos
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT username, email FROM users WHERE email = ?", (google_email,))
+        row = cursor.fetchone()
+
+        if not row:
+            # Auto-registrar usuario de Google
+            # Usar el nombre de Google como username (sanitizado)
+            base_username = google_name.replace(" ", "_").lower() if google_name else google_email.split("@")[0]
+            username = base_username
+
+            # Verificar que el username no esté repetido
+            cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+            if cursor.fetchone():
+                username = f"{base_username}_{random.randint(1000, 9999)}"
+
+            # Crear contraseña aleatoria (el usuario no la necesitará porque entra con Google)
+            random_password = get_password_hash(f"google_{random.randint(100000, 999999)}")
+
+            cursor.execute(
+                "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
+                (username, google_email, random_password)
+            )
+            conn.commit()
+            print(f"Usuario de Google registrado automáticamente: {username} ({google_email})")
+        else:
+            username = row[0]
+
+        conn.close()
+
+        # Generar tokens JWT directamente (sin 2FA para Google)
+        access_token = create_access_token(data={"sub": username})
+        refresh_token = create_refresh_token(data={"sub": username})
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "username": username,
+            "email": google_email,
+            "name": google_name,
+            "picture": google_picture
+        }
+
+    except ValueError as e:
+        print(f"Error verificando token de Google: {e}")
+        raise HTTPException(status_code=401, detail="Token de Google inválido o expirado")
+    except Exception as e:
+        print(f"Error en autenticación de Google: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.post("/auth/facebook")
+def facebook_login(data: dict):
+    """Autenticación con Facebook OAuth. Verifica el access token con Graph API."""
+    access_token_fb = data.get("accessToken")
+    if not access_token_fb:
+        raise HTTPException(status_code=400, detail="Falta el token de Facebook")
+
+    try:
+        # Verificar el token con Facebook Graph API
+        fb_response = requests.get(
+            "https://graph.facebook.com/me",
+            params={
+                "fields": "id,name,email,picture.type(large)",
+                "access_token": access_token_fb
+            },
+            timeout=10
+        )
+
+        if fb_response.status_code != 200:
+            raise HTTPException(status_code=401, detail="Token de Facebook inválido")
+
+        fb_data = fb_response.json()
+        fb_email = fb_data.get("email")
+        fb_name = fb_data.get("name", "")
+        fb_id = fb_data.get("id", "")
+        fb_picture = fb_data.get("picture", {}).get("data", {}).get("url", "")
+
+        # Si Facebook no devuelve email, usar un email generado con el ID
+        if not fb_email:
+            fb_email = f"fb_{fb_id}@facebook.com"
+
+        # Buscar si el usuario ya existe
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT username, email FROM users WHERE email = ?", (fb_email,))
+        row = cursor.fetchone()
+
+        if not row:
+            # Auto-registrar usuario de Facebook
+            base_username = fb_name.replace(" ", "_").lower() if fb_name else f"fb_user_{fb_id}"
+            username = base_username
+
+            # Verificar que el username no esté repetido
+            cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+            if cursor.fetchone():
+                username = f"{base_username}_{random.randint(1000, 9999)}"
+
+            # Contraseña aleatoria (el usuario entra con Facebook)
+            random_password = get_password_hash(f"facebook_{random.randint(100000, 999999)}")
+
+            cursor.execute(
+                "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
+                (username, fb_email, random_password)
+            )
+            conn.commit()
+            print(f"Usuario de Facebook registrado automáticamente: {username} ({fb_email})")
+        else:
+            username = row[0]
+
+        conn.close()
+
+        # Generar tokens JWT directamente (sin 2FA para Facebook)
+        access_token = create_access_token(data={"sub": username})
+        refresh_token = create_refresh_token(data={"sub": username})
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "username": username,
+            "email": fb_email,
+            "name": fb_name,
+            "picture": fb_picture
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error en autenticación de Facebook: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 # =========================
@@ -828,17 +1384,37 @@ def home():
             <div class="card">
                 <h1>Camara con deteccion de rostro y genero</h1>
                 <p><strong>Lugar configurado:</strong> {LUGAR}</p>
-                <p><strong>Excel:</strong> {EXCEL_FILE}</p>
-                <p><strong>Modelo:</strong> OpenCV DNN Face Detector + Gender Net</p>
+                <p><strong>Configuración Cámara:</strong> <span id="cam-info">{CAMERA_TYPE} ({"USB/Laptop" if CAMERA_TYPE=="LOCAL" else DROIDCAM_URL})</span></p>
+                
+                <div style="margin: 20px 0; padding: 15px; background: #f9f9f9; border-radius: 10px;">
+                    <strong>Cambiar Cámara:</strong>
+                    <button onclick="changeCam('LOCAL', 0)" style="cursor:pointer; padding: 8px; border-radius: 5px; border: 1px solid #ccc;">Laptop (Local 0)</button>
+                    <button onclick="changeCam('LOCAL', 1)" style="cursor:pointer; padding: 8px; border-radius: 5px; border: 1px solid #ccc;">USB (Local 1)</button>
+                    <button onclick="changeCam('IP', null)" style="cursor:pointer; padding: 8px; border-radius: 5px; border: 1px solid #ccc;">DroidCam (WiFi)</button>
+                </div>
+
                 <img src="/video" width="720" />
+                
                 <div class="links">
                     <a href="/detectar-rostro" target="_blank">Ver detección JSON</a>
                     <a href="/registros" target="_blank">Ver registros</a>
                     <a href="/estadisticas" target="_blank">Ver estadísticas</a>
                     <a href="/camera-status" target="_blank">Ver estado cámara</a>
-                    <a href="/probar-excel" target="_blank">Probar Excel</a>
                 </div>
             </div>
+
+            <script>
+                async function changeCam(type, index) {{
+                    const res = await fetch('/set-camera', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ type, index }})
+                    }});
+                    const data = await res.json();
+                    alert(data.message);
+                    location.reload();
+                }}
+            </script>
         </body>
     </html>
     """

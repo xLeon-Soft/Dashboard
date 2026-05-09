@@ -1,376 +1,313 @@
-<section class="dashboard-shell">
-    <div class="bg-glow glow-1"></div>
-    <div class="bg-glow glow-2"></div>
-    <div class="bg-pattern"></div>
+<div class="unified-panel">
+    <!-- Interactive Tooltip -->
+    <div class="custom-tooltip" *ngIf="hoveredSlice() || hoveredDay()" 
+         [style.left.px]="tooltipPos().x + 15" 
+         [style.top.px]="tooltipPos().y + 15">
+        <ng-container *ngIf="hoveredSlice() as slice">
+            <div class="tooltip-header">{{ slice === 'hombre' ? 'Hombre' : 'Mujer' }}</div>
+            <div class="tooltip-val">{{ slice === 'hombre' ? porcentajeHombres() : porcentajeMujeres() }}% de la población</div>
+        </ng-container>
+        <ng-container *ngIf="hoveredDay() as day">
+            <div class="tooltip-header">{{ day.fecha }}</div>
+            <div class="tooltip-row"><span class="marker" style="background: #4a8f6a;"></span> Hombre: <strong>{{ day.hombres }}</strong></div>
+            <div class="tooltip-row"><span class="marker" style="background: #e879a0;"></span> Mujer: <strong>{{ day.mujeres }}</strong></div>
+            <div class="tooltip-footer">Detecciones Totales: {{ day.personas }}</div>
+        </ng-container>
+    </div>
 
-    <header class="topbar">
-        <div class="topbar-left">
-            <div class="welcome-badge">
-                <span class="welcome-dot"></span>
-                <span>Monitoreo inteligente activo</span>
-            </div>
-
-            <h1>Dashboard de detección de rostros y género</h1>
-
-            <p class="topbar-subtitle">
-                Visualiza la cámara en vivo, analiza el flujo de personas por día
-                y consulta la distribución por género desde una interfaz premium y ordenada.
-            </p>
+    <!-- Header: Identity & Status -->
+    <header class="main-header">
+        <div class="header-info">
+            <h1>Panel de Control Analítico</h1>
+            <p style="margin: 0; font-size: 0.85rem; color: #5f7a6a; font-weight: 600;">{{ obtenerFechaRango() }} | {{ obtenerHoraSegundos() }}</p>
         </div>
-
-        <div class="topbar-right">
-            <div class="overview-card">
-                <div class="overview-copy">
-                    <strong>Panel de rendimiento visual</strong>
-                    <p>Vista ejecutiva con métricas, actividad diaria y monitoreo en tiempo real.</p>
-                </div>
-
-                <div class="overview-brand">
-                    <span>FaceMonitor</span>
-                    <strong>2026</strong>
-                </div>
+        <div class="header-tools">
+            <div class="status-indicator">
+                <div class="pulse-dot"></div>
+                <span>Sincronizado con Excel</span>
             </div>
-
-            <div class="topbar-actions">
-                <div class="live-status">
-                    <div class="live-status-row">
-                        <span class="live-dot"></span>
-                        <span>Actualización en tiempo real</span>
-                    </div>
-
-                    <small *ngIf="ultimaActualizacion()">
-                        Última actualización: {{ ultimaActualizacion() }}
-                    </small>
-                </div>
-
-                <button type="button" class="refresh-btn" (click)="cargarDatos()">
-                    <span>↻</span>
-                    <span>Actualizar</span>
-                </button>
+            
+            <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+                <label style="font-size: 0.7rem; font-weight: 700; color: #5f7a6a; text-transform: uppercase; letter-spacing: 0.05em;">Fecha (Opcional)</label>
+                <input type="date" [(ngModel)]="fechaReporte" style="height: 38px; border-radius: 8px; border: 1px solid rgba(74,143,106,0.2); padding: 0 12px; font-family: 'Outfit', sans-serif; font-size: 0.85rem; color: #2f4f3d; background: #fff; outline: none; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
             </div>
+            <button class="tool-item" 
+                    [disabled]="generandoPDF() || !hayRegistrosEnFecha()"
+                    (click)="exportarReportePDF()"
+                    [style.opacity]="(!hayRegistrosEnFecha() || generandoPDF()) ? '0.5' : '1'"
+                    [style.cursor]="(!hayRegistrosEnFecha() || generandoPDF()) ? 'not-allowed' : 'pointer'"
+                    style="background: linear-gradient(135deg, #4a8f6a, #6fbf8f); color: #fff; border: none; font-weight: 700; box-shadow: 0 4px 12px rgba(74,143,106,0.2);">
+                <ng-container *ngIf="!generandoPDF()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                    {{ !hayRegistrosEnFecha() ? 'Sin datos en fecha' : 'Exportar Reporte' }}
+                </ng-container>
+                <ng-container *ngIf="generandoPDF()">
+                    <div class="spinner" style="width: 16px; height: 16px; border-width: 2px; border-top-color: #fff;"></div>
+                    Generando...
+                </ng-container>
+            </button>
         </div>
     </header>
 
-    <section class="state-card" *ngIf="cargando()">
-        <div class="state-icon spinner"></div>
-        <div>
-            <strong>Cargando estadísticas...</strong>
-            <p>Consultando los datos registrados por la API.</p>
-        </div>
-    </section>
+    <div *ngIf="cargando()" class="loading-state">
+        <div class="spinner"></div>
+    </div>
 
-    <section class="state-card error" *ngIf="!cargando() && error()">
-        <div class="state-icon error-icon">!</div>
-        <div>
-            <strong>Error al cargar datos</strong>
-            <p>{{ error() }}</p>
-        </div>
-    </section>
+    <div *ngIf="!cargando() && data() as dashboard">
+        <!-- OVER VIEW CONTAINER -->
+        <section class="overview-wrapper">
+            <h2 class="overview-title">Resumen de Estadísticas</h2>
+            <div class="stats-row">
+                <article class="stat-item-card">
+                    <div class="stat-icon-circle" style="background: rgba(74, 143, 106, 0.1);">
+                        <img src="/hombre.png" alt="Hombres" style="width: 32px; height: 32px; object-fit: contain;">
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Total Hombres</span>
+                        <span class="stat-main">{{ data()?.totales?.hombres | number }}</span>
+                    </div>
+                </article>
 
-    <ng-container *ngIf="!cargando() && !error() && data() as dashboard">
-        <section class="summary-grid">
-            <article class="main-income-card">
-                <div class="card-label">Resumen principal</div>
+                <article class="stat-item-card">
+                    <div class="stat-icon-circle" style="background: rgba(232, 121, 160, 0.12);">
+                        <img src="/mujer.png" alt="Mujeres" style="width: 32px; height: 32px; object-fit: contain;">
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Total Mujeres</span>
+                        <span class="stat-main">{{ data()?.totales?.mujeres | number }}</span>
+                    </div>
+                </article>
 
-                <div class="income-value">{{ dashboard.totales.personas }}</div>
+                <article class="stat-item-card">
+                    <div class="stat-icon-circle" style="background: rgba(232, 168, 85, 0.12);">
+                        <img src="/calendario.png" alt="Promedio" style="width: 32px; height: 32px; object-fit: contain;">
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Promedio Diario</span>
+                        <span class="stat-main">{{ promedioDiario() | number }}</span>
+                    </div>
+                </article>
 
-                <div class="income-meta">
-                    <span>Total de personas detectadas</span>
-                    <strong>
-                        {{
-                        dashboard.totales.eventos > 0
-                        ? '+' + (dashboard.totales.personas / dashboard.totales.eventos).toFixed(1)
-                        : '+0'
-                        }}
-                        por evento
-                    </strong>
-                </div>
-            </article>
-
-            <article class="quick-stat-card">
-                <div class="quick-stat-head">
-                    <span class="quick-icon">◎</span>
-                    <span>Promedio por evento</span>
-                </div>
-                <strong>{{ promedioPorEvento() }}</strong>
-                <small>Personas por evento</small>
-            </article>
-
-            <article class="quick-stat-card blue">
-                <div class="quick-stat-head">
-                    <span class="quick-icon">♂</span>
-                    <span>Hombres</span>
-                </div>
-                <div class="gender-hero">
-                    <img src="/man.svg" alt="Icono masculino">
-                </div>
-                <strong>{{ dashboard.totales.hombres }}</strong>
-                <small>{{ porcentajeHombres() }}% del total</small>
-            </article>
-
-            <article class="quick-stat-card pink">
-                <div class="quick-stat-head">
-                    <span class="quick-icon">♀</span>
-                    <span>Mujeres</span>
-                </div>
-                <div class="gender-hero">
-                    <img src="/woman.svg" alt="Icono femenino">
-                </div>
-                <strong>{{ dashboard.totales.mujeres }}</strong>
-                <small>{{ porcentajeMujeres() }}% del total</small>
-            </article>
+                <article class="stat-item-card">
+                    <div class="stat-icon-circle" style="background: rgba(92, 212, 160, 0.12);">
+                        <img src="/grafico-de-barras.png" alt="Hoy" style="width: 32px; height: 32px; object-fit: contain;">
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Detectados Hoy</span>
+                        <span class="stat-main">{{ detectadosHoy() | number }}</span>
+                    </div>
+                </article>
+            </div>
         </section>
 
-        <section class="main-grid">
-            <article class="camera-column">
-                <section class="panel camera-panel">
-                    <div class="panel-header">
-                        <div>
-                            <p class="panel-tag">Live stream</p>
-                            <h2>Cámara en vivo</h2>
-                            <p>Transmisión directa desde tu API FastAPI.</p>
-                        </div>
-
-                        <span class="live-badge">EN VIVO</span>
+        <!-- MAIN DASHBOARD GRID -->
+        <section class="main-dashboard-grid">
+            <!-- Col 1, Row 1: Total Vertical Panel -->
+            <article class="total-vertical-panel">
+                <h3 class="card-title-main" style="font-size: 0.9rem;">Total Detectados <span>⋮</span></h3>
+                <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                    <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(74, 143, 106, 0.1); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; color: #4a8f6a;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 24px; height: 24px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                     </div>
-
-                    <div class="camera-frame">
-                        <div class="camera-topbar">
-                            <div class="camera-chip">
-                                <span class="camera-chip-dot"></span>
-                                <span>Canal principal</span>
-                            </div>
-
-                            <div class="camera-chip soft">
-                                {{ ultimaActualizacion() || '--:--:--' }}
-                            </div>
-                        </div>
-
-                        <img [src]="videoUrl" alt="Cámara en vivo">
-                    </div>
-                </section>
-
-                <section class="bottom-left-grid">
-                    <article class="panel notes-panel">
-                        <div class="panel-header compact">
-                            <div>
-                                <p class="panel-tag">Insights</p>
-                                <h2>Notas del sistema</h2>
-                            </div>
-                        </div>
-
-                        <ul class="notes-list">
-                            <li>
-                                Eventos totales:
-                                <strong>{{ dashboard.totales.eventos }}</strong>
-                            </li>
-                            <li>
-                                Promedio por evento:
-                                <strong>{{ promedioPorEvento() }}</strong>
-                            </li>
-                            <li>
-                                Participación masculina:
-                                <strong>{{ porcentajeHombres() }}%</strong>
-                            </li>
-                            <li>
-                                Participación femenina:
-                                <strong>{{ porcentajeMujeres() }}%</strong>
-                            </li>
-                            <li>
-                                Último refresco:
-                                <strong>{{ ultimaActualizacion() || '--:--:--' }}</strong>
-                            </li>
-                        </ul>
-                    </article>
-
-                    <article class="panel mini-team-panel">
-                        <div class="panel-header compact">
-                            <div>
-                                <p class="panel-tag">Resumen rápido</p>
-                                <h2>Métricas clave</h2>
-                            </div>
-                        </div>
-
-                        <div class="mini-kpi-grid">
-                            <div class="mini-kpi">
-                                <span>Eventos</span>
-                                <strong>{{ dashboard.totales.eventos }}</strong>
-                            </div>
-                            <div class="mini-kpi">
-                                <span>Personas</span>
-                                <strong>{{ dashboard.totales.personas }}</strong>
-                            </div>
-                            <div class="mini-kpi">
-                                <span>Hombres</span>
-                                <strong>{{ dashboard.totales.hombres }}</strong>
-                            </div>
-                            <div class="mini-kpi">
-                                <span>Mujeres</span>
-                                <strong>{{ dashboard.totales.mujeres }}</strong>
-                            </div>
-                        </div>
-                    </article>
-                </section>
+                    <h2 style="font-size: 2.2rem; font-weight: 900; margin: 0; letter-spacing: -1px;">{{ dashboard.totales.personas | number }}</h2>
+                    <p style="color: #5f7a6a; font-size: 0.8rem; font-weight: 700; margin-top: 5px;">Identificaciones Procesadas</p>
+                </div>
             </article>
 
-            <aside class="analytics-column">
-                <article class="panel donut-panel">
-                    <div class="panel-header compact">
-                        <div>
-                            <p class="panel-tag">Gender split</p>
-                            <h2>Distribución general</h2>
-                        </div>
+            <!-- Col 2, Row 1: Distribution Panel -->
+            <article class="distribution-panel">
+                <h3 class="card-title-main">Distribución de Género <span>%</span></h3>
+                <div class="legacy-pie-layout" (mouseleave)="handlePieHover(null)">
+                    <div class="legacy-pie-visual">
+                        <svg viewBox="-55 -55 110 110" style="width: 100%;">
+                            <path class="pie-path" [attr.d]="generarPathPie(0, porcentajeHombres())" fill="#4a8f6a" [style.opacity]="hoveredSlice() === 'mujer' ? 0.4 : 1" (mouseenter)="handlePieHover('hombre', $event)" (mousemove)="updateTooltipPos($event)"></path>
+                            <path class="pie-path" [attr.d]="generarPathPie(porcentajeHombres(), 100)" fill="#e879a0" [style.opacity]="hoveredSlice() === 'hombre' ? 0.4 : 1" (mouseenter)="handlePieHover('mujer', $event)" (mousemove)="updateTooltipPos($event)"></path>
+                            <text *ngIf="porcentajeHombres() > 5" [attr.x]="posicionLabelPie(0, porcentajeHombres()).x" [attr.y]="posicionLabelPie(0, porcentajeHombres()).y" class="pie-text-label" style="fill: white;" text-anchor="middle" dominant-baseline="middle">{{ porcentajeHombres() }}%</text>
+                            <text *ngIf="porcentajeMujeres() > 5" [attr.x]="posicionLabelPie(porcentajeHombres(), 100).x" [attr.y]="posicionLabelPie(porcentajeHombres(), 100).y" class="pie-text-label" style="fill: white;" text-anchor="middle" dominant-baseline="middle">{{ porcentajeMujeres() }}%</text>
+                        </svg>
                     </div>
-
-                    <div class="donut-wrap">
-                        <div class="fake-donut" [style.--men]="porcentajeHombres()"
-                            [style.--women]="porcentajeMujeres()">
-                        </div>
-
-                        <div class="donut-legend">
-                            <div class="legend-row">
-                                <span class="legend-dot men"></span>
-                                <div>
-                                    <span>Hombres</span>
-                                    <strong>{{ dashboard.totales.hombres }}</strong>
-                                </div>
-                                <b>{{ porcentajeHombres() }}%</b>
+                    <div class="legacy-legend">
+                        <div class="legacy-legend-item">
+                            <span class="legacy-marker" style="background: #4a8f6a;"></span>
+                            <div style="display:flex; flex-direction:column;">
+                                <span style="font-size: 0.75rem; color: #5f7a6a;">Hombres</span>
+                                <span>{{ dashboard.totales.hombres | number }}</span>
                             </div>
-
-                            <div class="legend-row">
-                                <span class="legend-dot women"></span>
-                                <div>
-                                    <span>Mujeres</span>
-                                    <strong>{{ dashboard.totales.mujeres }}</strong>
-                                </div>
-                                <b>{{ porcentajeMujeres() }}%</b>
+                        </div>
+                        <div class="legacy-legend-item">
+                            <span class="legacy-marker" style="background: #e879a0;"></span>
+                            <div style="display:flex; flex-direction:column;">
+                                <span style="font-size: 0.75rem; color: #5f7a6a;">Mujeres</span>
+                                <span>{{ dashboard.totales.mujeres | number }}</span>
                             </div>
                         </div>
                     </div>
-                </article>
+                </div>
+            </article>
 
-                <article class="panel activity-panel">
-                    <div class="panel-header compact">
-                        <div>
-                            <p class="panel-tag">Daily trend</p>
-                            <h2>Personas por día</h2>
-                        </div>
-                    </div>
-
-                    <div class="bars-wrap">
-                        <div class="bar-row" *ngFor="let item of paginaPorDia(); trackBy: trackByFecha">
-                            <div class="bar-row-top">
-                                <span>{{ item.fecha }}</span>
-                                <strong>{{ item.personas }}</strong>
-                            </div>
-
-                            <div class="bar-track">
-                                <div class="bar-fill" [style.width.%]="porcentajeBarra(item.personas)"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="pagination-controls" *ngIf="totalPages() > 1">
-                        <span class="pagination-summary">
-                            Página {{ currentPage() }} de {{ totalPages() }}
-                        </span>
-                        <div class="pagination-actions">
-                            <button type="button" (click)="prevPage()" [disabled]="currentPage() === 1">
-                                ← Anterior
-                            </button>
-                            <button type="button" (click)="nextPage()" [disabled]="currentPage() === totalPages()">
-                                Siguiente →
-                            </button>
-                        </div>
-                    </div>
-                </article>
-
-                <article class="panel breakdown-panel">
-                    <div class="panel-header compact">
-                        <div>
-                            <p class="panel-tag">Breakdown</p>
-                            <h2>Distribución por género</h2>
-                        </div>
-                    </div>
-
-                    <div class="breakdown-grid">
-                        <div class="breakdown-card men-card">
-                            <div class="breakdown-top">
-                                <h3>Hombres</h3>
-                                <strong>{{ porcentajeHombres() }}%</strong>
-                            </div>
-
-                            <div class="progress-track">
-                                <div class="progress-fill men-fill" [style.width.%]="porcentajeHombres()"></div>
-                            </div>
-
-                            <small>Total: {{ dashboard.totales.hombres }}</small>
-                        </div>
-
-                        <div class="breakdown-card women-card">
-                            <div class="breakdown-top">
-                                <h3>Mujeres</h3>
-                                <strong>{{ porcentajeMujeres() }}%</strong>
-                            </div>
-
-                            <div class="progress-track">
-                                <div class="progress-fill women-fill" [style.width.%]="porcentajeMujeres()"></div>
-                            </div>
-
-                            <small>Total: {{ dashboard.totales.mujeres }}</small>
-                        </div>
-                    </div>
-                </article>
-            </aside>
-        </section>
-
-        <section class="table-section">
-            <article class="panel table-panel">
-                <div class="panel-header">
-                    <div>
-                        <p class="panel-tag">Historical data</p>
-                        <h2>Resumen por día</h2>
-                        <p>Eventos, personas y distribución diaria registrada.</p>
+            <!-- Col 1-2, Row 2: Trend Analysis -->
+            <article class="trend-full-panel" style="background: #ffffff; border: 1px solid rgba(74,143,106,0.1);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 25px;">
+                    <h3 style="margin: 0; font-size: 1.1rem; color: #2f4f3d; font-weight: 700;">Tendencia de Detecciones</h3>
+                    <div style="display: flex; gap: 24px; font-size: 0.85rem; font-weight: 600; color: #5f7a6a;">
+                        <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 26px; height: 12px; background: #4a8f6a; border-radius: 6px;"></span> Hombres</div>
+                        <div style="display: flex; align-items: center; gap: 8px;"><span style="width: 26px; height: 12px; background: #e879a0; border-radius: 6px;"></span> Mujeres</div>
                     </div>
                 </div>
 
-                <div class="table-wrap">
-                    <table>
+                <div class="trend-horizontal-layout">
+                    <!-- Fixed Y-Axis Labels -->
+                    <div class="y-axis-container">
+                        <span style="top: 73.3%;">0</span>
+                        <span style="top: 58.3%;">50</span>
+                        <span style="top: 43.3%;">100</span>
+                        <span style="top: 28.3%;">150</span>
+                        <span style="top: 13.3%;">200</span>
+                    </div>
+
+                    <!-- Scrollable Content -->
+                    <div class="trend-main-content">
+                        <div class="trend-viewport" #chartContainer 
+                             (mousedown)="startDragging($event, chartContainer)"
+                             (mousemove)="moveChart($event, chartContainer)"
+                             (mouseup)="stopDragging(chartContainer)"
+                             (mouseleave)="stopDragging(chartContainer); handleTrendHover(null)"
+                             (scroll)="syncScroll($event, datesViewport)">
+                            
+                            <svg viewBox="0 0 1000 300" preserveAspectRatio="none" 
+                                 [style.width.px]="(data()?.por_dia?.length || 0) * 100 > 1000 ? (data()?.por_dia?.length || 0) * 100 : 1000" 
+                                 style="height: 100%; display: block; border-left: 1px solid rgba(74,143,106,0.1); border-bottom: 1px solid rgba(74,143,106,0.1);">
+                                
+                                <!-- Lines -->
+                                <path [attr.d]="pathHombres()" style="stroke: #4a8f6a; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round;" />
+                                <path [attr.d]="pathMujeres()" style="stroke: #e879a0; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round;" />
+
+                                <!-- Data Points & Labels -->
+                                <ng-container *ngFor="let item of data()?.por_dia; let i = index">
+                                    <!-- Male Points & Labels (Above) -->
+                                    <circle [attr.cx]="50 + i * (900 / (data()?.por_dia?.length! - 1))" 
+                                            [attr.cy]="220 - (item.hombres / maxChartValue()) * 180" 
+                                            r="6" fill="#4a8f6a"></circle>
+                                    <text [attr.x]="50 + i * (900 / (data()?.por_dia?.length! - 1))" 
+                                          [attr.y]="205 - (item.hombres / maxChartValue()) * 180" 
+                                          fill="#4a8f6a" font-size="12" font-weight="700" text-anchor="middle">{{ item.hombres }}</text>
+
+                                    <!-- Female Points & Labels (Below) -->
+                                    <circle [attr.cx]="50 + i * (900 / (data()?.por_dia?.length! - 1))" 
+                                            [attr.cy]="220 - (item.mujeres / maxChartValue()) * 180" 
+                                            r="6" fill="#e879a0"></circle>
+                                    <text [attr.x]="50 + i * (900 / (data()?.por_dia?.length! - 1))" 
+                                          [attr.y]="242 - (item.mujeres / maxChartValue()) * 180" 
+                                          fill="#e879a0" font-size="12" font-weight="700" text-anchor="middle">{{ item.mujeres }}</text>
+
+                                    <!-- Interaction area -->
+                                    <rect [attr.x]="(50 + i * (900 / (data()?.por_dia?.length! - 1))) - 20"
+                                          y="0" width="40" height="300" fill="transparent" style="cursor: pointer;"
+                                          (mouseenter)="handleTrendHover(item, $event)" (mousemove)="updateTooltipPos($event)"></rect>
+                                </ng-container>
+                            </svg>
+                        </div>
+
+                        <!-- Dates Viewport (Below Scrollbar) -->
+                        <div class="dates-viewport" #datesViewport style="overflow: hidden;">
+                            <div [style.width.px]="(data()?.por_dia?.length || 0) * 100 > 1000 ? (data()?.por_dia?.length || 0) * 100 : 1000" 
+                                 style="position: relative; height: 35px; margin-top: 10px;">
+                                <span *ngFor="let item of data()?.por_dia; let i = index" 
+                                      [style.left.%]="5 + (i * (90 / (data()?.por_dia?.length! - 1)))"
+                                      style="position: absolute; transform: translateX(-50%); color: #5f7a6a; font-size: 0.85rem; font-weight: 700; white-space: nowrap;">
+                                    {{ item.fecha.split('-')[2] }}/{{ item.fecha.split('-')[1] }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align: center; color: #7d8a82; font-size: 0.8rem; font-weight: 700; margin-top: 10px;">Fecha</div>
+            </article>
+
+            <!-- Col 3, Row 1-2: Historical Log Table -->
+            <article class="table-panel">
+                <h3 class="card-title-main">Registro Histórico (Excel)</h3>
+                <div style="overflow-y: auto; flex: 1;">
+                    <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Fecha</th>
-                                <th>Eventos</th>
-                                <th>Personas</th>
+                                <th>Día</th>
                                 <th>Hombres</th>
                                 <th>Mujeres</th>
+                                <th style="width: 120px;">Balance de Género</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr *ngFor="let item of tablaPorDia(); trackBy: trackByFecha">
-                                <td>{{ item.fecha }}</td>
-                                <td>{{ item.eventos }}</td>
-                                <td>{{ item.personas }}</td>
-                                <td>{{ item.hombres }}</td>
-                                <td>{{ item.mujeres }}</td>
+                            <tr *ngFor="let item of tablaPorDia()">
+                                <td><span class="day-badge">{{ item.fecha.split('-')[2] }}/{{ item.fecha.split('-')[1] }}</span></td>
+                                <td style="color: #4a8f6a;">{{ item.hombres }}</td>
+                                <td style="color: #e879a0;">{{ item.mujeres }}</td>
+                                <td>
+                                    <div class="balance-track" title="Distribución H/M">
+                                        <div class="balance-fill" [style.width.%]="(item.hombres / (item.personas || 1)) * 100" style="background: #4a8f6a;"></div>
+                                        <div class="balance-fill" [style.width.%]="(item.mujeres / (item.personas || 1)) * 100" style="background: #e879a0;"></div>
+                                    </div>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
-
-                <div class="pagination-controls" *ngIf="totalTablePages() > 1">
-                    <span class="pagination-summary">
-                        Página {{ currentTablePage() }} de {{ totalTablePages() }}
-                    </span>
-                    <div class="pagination-actions">
-                        <button type="button" (click)="prevTablePage()" [disabled]="currentTablePage() === 1">
-                            ← Anterior
-                        </button>
-                        <button type="button" (click)="nextTablePage()" [disabled]="currentTablePage() === totalTablePages()">
-                            Siguiente →
-                        </button>
-                    </div>
+                <!-- Pagination -->
+                <div class="pagination-controls">
+                    <span class="page-info">Página {{ currentTablePage() }} de {{ totalTablePages() }}</span>
+                    <button (click)="prevTablePage()" [disabled]="currentTablePage() === 1" class="pagination-btn" title="Página Anterior">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    </button>
+                    <button (click)="nextTablePage()" [disabled]="currentTablePage() === totalTablePages()" class="pagination-btn" title="Página Siguiente">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </button>
                 </div>
             </article>
         </section>
-    </ng-container>
-</section>
+    </div>
+</div>
+
+<!-- Contenedor oculto para el reporte en PDF específico por día -->
+<div class="daily-report-container" style="position: absolute; left: -9999px; top: 0; padding: 40px; background: #f2f5f1; width: 800px; color: #2f4f3d;">
+    <h1 style="text-align: center; color: #2f4f3d; margin-bottom: 10px; font-size: 2.2rem; font-weight: 900;">Reporte de Detecciones</h1>
+    <h3 style="text-align: center; color: #4a8f6a; margin-bottom: 40px; font-size: 1.2rem; font-weight: 700;">Fecha: {{ fechaReporte() || 'General' }}</h3>
+
+    <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 40px;">
+        <div class="pie-chart" [style.background]="'conic-gradient(#4a8f6a ' + statsReporte().pctHombres + '%, #e879a0 0)'" style="width: 200px; height: 200px; border-radius: 50%; box-shadow: 0 8px 24px rgba(0,0,0,0.1);"></div>
+        <div style="margin-left: 40px; display: flex; flex-direction: column; justify-content: center; gap: 14px; font-weight: 700; font-size: 1.1rem;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 22px; height: 22px; background: #4a8f6a; border-radius: 6px;"></div>
+                <span>Hombres: {{ statsReporte().hombres }} ({{ statsReporte().pctHombres | number:'1.0-1' }}%)</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 22px; height: 22px; background: #e879a0; border-radius: 6px;"></div>
+                <span>Mujeres: {{ statsReporte().mujeres }} ({{ statsReporte().pctMujeres | number:'1.0-1' }}%)</span>
+            </div>
+            <div style="margin-top: 10px; padding-top: 14px; border-top: 2px solid rgba(74, 143, 106, 0.2);">
+                <span style="font-size: 1.3rem; font-weight: 900; color: #2f4f3d;">Total Personas: {{ statsReporte().total }}</span>
+            </div>
+        </div>
+    </div>
+
+    <table style="width: 100%; border-collapse: collapse; text-align: left; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(74,143,106,0.08);">
+        <thead>
+            <tr style="background: rgba(74, 143, 106, 0.1);">
+                <th style="padding: 14px 18px; border-bottom: 2px solid rgba(74,143,106,0.2); color: #2f4f3d; font-weight: 800; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em;">Hora</th>
+                <th style="padding: 14px 18px; border-bottom: 2px solid rgba(74,143,106,0.2); color: #2f4f3d; font-weight: 800; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em;">Lugar</th>
+                <th style="padding: 14px 18px; border-bottom: 2px solid rgba(74,143,106,0.2); color: #2f4f3d; font-weight: 800; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em;">Personas</th>
+                <th style="padding: 14px 18px; border-bottom: 2px solid rgba(74,143,106,0.2); color: #2f4f3d; font-weight: 800; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.05em;">Géneros</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let r of registrosReporte(); let even = even" [style.background]="even ? '#ffffff' : 'rgba(74, 143, 106, 0.02)'">
+                <td style="padding: 14px 18px; border-bottom: 1px solid rgba(74,143,106,0.1); font-weight: 700; color: #5f7a6a;">{{ r.FechaHora?.split(' ')[1] || 'N/A' }}</td>
+                <td style="padding: 14px 18px; border-bottom: 1px solid rgba(74,143,106,0.1); font-weight: 600;">{{ r.Lugar }}</td>
+                <td style="padding: 14px 18px; border-bottom: 1px solid rgba(74,143,106,0.1); font-weight: 900; color: #2f4f3d;">{{ r.RostrosDetectados }}</td>
+                <td style="padding: 14px 18px; border-bottom: 1px solid rgba(74,143,106,0.1); font-weight: 600;">{{ r.Genero }}</td>
+            </tr>
+            <tr *ngIf="registrosReporte().length === 0">
+                <td colspan="4" style="padding: 30px; text-align: center; color: #7d8a82; font-style: italic; font-weight: 600;">No hay registros para la fecha seleccionada.</td>
+            </tr>
+        </tbody>
+    </table>
+</div>

@@ -1,0 +1,107 @@
+/* ═══════════════════════════════════════════
+   GLOBAL DESIGN SYSTEM — GREEN NATURE THEME
+   ═══════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* ── Core Palette (Light Nature) ── */
+  --bg-app: #f2f5f1;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f4f7f2;
+  --bg-card: #ffffff;
+  --bg-card-hover: #eef4f0;
+  --bg-soft: #e8f0ea;
+
+  /* ── Accent (Green) ── */
+  --accent: #4a8f6a;
+  --accent-light: #6fbf8f;
+  --accent-muted: rgba(74, 143, 106, 0.12);
+  --accent-soft: rgba(74, 143, 106, 0.06);
+
+  /* ── Text ── */
+  --text-primary: #2f4f3d;
+  --text-secondary: #5f7a6a;
+  --text-muted: #7d8a82;
+
+  /* ── Borders ── */
+  --border: rgba(74, 143, 106, 0.12);
+  --border-hover: rgba(74, 143, 106, 0.25);
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 2px 8px rgba(74, 143, 106, 0.06);
+  --shadow-md: 0 8px 24px rgba(74, 143, 106, 0.08);
+  --shadow-lg: 0 16px 48px rgba(74, 143, 106, 0.12);
+
+  /* ── Data Colors ── */
+  --blue: #4a8f6a;
+  --blue-light: rgba(74, 143, 106, 0.1);
+  --pink: #e879a0;
+  --pink-light: rgba(232, 121, 160, 0.1);
+  --green: #6fbf8f;
+  --green-light: rgba(111, 191, 143, 0.1);
+  --red: #e85d68;
+  --orange: #d4915c;
+  --purple: #8b7ec8;
+  --indigo: #6c8caa;
+  --teal: #5db8a9;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+/* ── Scrollbar (Webkit) ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(74, 143, 106, 0.15);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(74, 143, 106, 0.3);
+}
+
+/* ── Selection ── */
+::selection {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+/* ── Focus outline ── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}

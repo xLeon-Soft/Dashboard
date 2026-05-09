@@ -1,0 +1,223 @@
+<div class="page-shell">
+  <div class="page-wrapper">
+
+    <!-- ─── HEADER ──────────────────────────── -->
+    <header class="page-header">
+      <div>
+        <span class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Análisis de Tendencias
+        </span>
+        <h1>Pulso de Detecciones</h1>
+        <p>Visualiza la evolución de la actividad, identifica picos, tendencias y pronostica el comportamiento futuro.</p>
+      </div>
+    </header>
+
+    <div *ngIf="cargando()" class="state-panel loading-panel">
+      <div class="spinner"></div> Analizando tendencias...
+    </div>
+    <div *ngIf="error()" class="state-panel error-panel">{{ error() }}</div>
+
+    <div *ngIf="!cargando() && !error() && dias().length > 0" class="page-grid">
+
+      <!-- ── KPI BANNER ───────────────────────────── -->
+      <section class="kpi-banner">
+        <div class="kpi-item kpi-primary">
+          <div class="kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          </div>
+          <div class="kpi-data">
+            <span>Promedio diario</span>
+            <strong>{{ promedioDiario() | number }}</strong>
+            <small>personas / día</small>
+          </div>
+        </div>
+        <div class="kpi-item" [class.kpi-up]="crecimientoTotal() >= 0" [class.kpi-down]="crecimientoTotal() < 0">
+          <div class="kpi-icon-wrap">
+            <svg *ngIf="crecimientoTotal() >= 0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            <svg *ngIf="crecimientoTotal() < 0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
+          </div>
+          <div class="kpi-data">
+            <span>Crecimiento total</span>
+            <strong>{{ crecimientoTotal() >= 0 ? '+' : '' }}{{ crecimientoTotal() }}%</strong>
+            <small>primer vs último día</small>
+          </div>
+        </div>
+        <div class="kpi-item kpi-peak">
+          <div class="kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <div class="kpi-data">
+            <span>Mejor día</span>
+            <strong>{{ mejorDia().fecha }}</strong>
+            <small>{{ mejorDia().personas | number }} personas</small>
+          </div>
+        </div>
+        <div class="kpi-item kpi-range">
+          <div class="kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </div>
+          <div class="kpi-data">
+            <span>Rango actividad</span>
+            <strong>{{ minPersonas() | number }} – {{ maxPersonas() | number }}</strong>
+            <small>mín / máx personas/día</small>
+          </div>
+        </div>
+        <div class="kpi-item kpi-total-days">
+          <div class="kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <div class="kpi-data">
+            <span>Período analizado</span>
+            <strong>{{ dias().length }}</strong>
+            <small>días con registros</small>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── MAIN TREND CHART ─────────────────────── -->
+      <section class="chart-section">
+        <div class="card-base chart-card">
+          <div class="chart-header">
+            <div>
+              <h2>Evolución de Detecciones</h2>
+              <p>Línea total (azul) · Hombres (índigo) · Mujeres (rosa)</p>
+            </div>
+            <div class="chart-legend">
+              <div class="cl-item"><span class="cl-dot dot-total"></span>Total</div>
+              <div class="cl-item"><span class="cl-dot dot-hombres"></span>Hombres</div>
+              <div class="cl-item"><span class="cl-dot dot-mujeres"></span>Mujeres</div>
+            </div>
+          </div>
+
+          <div class="svg-wrap">
+            <!-- Tooltip -->
+            <div *ngIf="hoveredDia() as hd" class="chart-tooltip" [style.left.px]="tooltipX()" [style.top.px]="tooltipY()">
+              <div class="tt-date">{{ hd.fecha }}</div>
+              <div class="tt-row"><span class="tt-dot dt"></span> Total <strong>{{ hd.personas | number }}</strong></div>
+              <div class="tt-row"><span class="tt-dot dh"></span> Hombres <strong>{{ hd.hombres | number }}</strong></div>
+              <div class="tt-row"><span class="tt-dot dm"></span> Mujeres <strong>{{ hd.mujeres | number }}</strong></div>
+            </div>
+
+            <svg [attr.viewBox]="'0 0 ' + 1000 + ' ' + 260" class="trend-svg" preserveAspectRatio="xMidYMid meet">
+              <!-- Grid lines -->
+              <ng-container *ngFor="let yl of yLabels()">
+                <line [attr.x1]="50" [attr.y1]="yl.y" [attr.x2]="950" [attr.y2]="yl.y" class="grid-line"/>
+                <text [attr.x]="42" [attr.y]="yl.y + 4" class="y-label">{{ yl.val | number }}</text>
+              </ng-container>
+
+              <!-- Area fill personas -->
+              <path [attr.d]="areaPersonas()" class="area-total"/>
+
+              <!-- Lines -->
+              <path [attr.d]="pathPersonas()" class="line-total"/>
+              <path [attr.d]="pathHombres()"  class="line-hombres"/>
+              <path [attr.d]="pathMujeres()"  class="line-mujeres"/>
+
+              <!-- Dots for personas (interactive) -->
+              <ng-container *ngFor="let pt of puntosSVG()">
+                <circle
+                  [attr.cx]="pt.x"
+                  [attr.cy]="pt.y"
+                  r="6"
+                  class="dot-total-circle"
+                  (mouseenter)="onDotHover(pt, $event)"
+                  (mouseleave)="onDotLeave()"/>
+              </ng-container>
+
+              <!-- X-axis labels (first and last, plus some in between) -->
+              <ng-container *ngFor="let pt of puntosSVG(); let i = index">
+                <text *ngIf="i === 0 || i === puntosSVG().length - 1 || (i % Math.max(1, Math.floor(puntosSVG().length / 5)) === 0)"
+                  [attr.x]="pt.x" [attr.y]="250" text-anchor="middle" class="x-label">
+                  {{ pt.dia.fecha }}
+                </text>
+              </ng-container>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── DAILY TREND TABLE + FORECAST ─────────── -->
+      <section class="bottom-section">
+
+        <!-- Daily list with trend arrows -->
+        <div class="card-base trend-list-card">
+          <h2>Actividad por Día</h2>
+          <p>Evolución día a día con indicador de tendencia.</p>
+          <div class="trend-list">
+            <div *ngFor="let d of tendenciaDias().slice().reverse()" class="tl-row" [class.tl-up]="d.tendencia==='up'" [class.tl-down]="d.tendencia==='down'">
+              <span class="tl-date">{{ d.fecha }}</span>
+              <div class="tl-bar-wrap">
+                <div class="tl-bar" [style.width.%]="maxPersonas() ? (d.personas / maxPersonas()) * 100 : 0"></div>
+              </div>
+              <strong class="tl-val">{{ d.personas | number }}</strong>
+              <div class="tl-arrow">
+                <svg *ngIf="d.tendencia === 'up'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                <svg *ngIf="d.tendencia === 'down'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+                <svg *ngIf="d.tendencia === 'neutral'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </div>
+              <span class="tl-cambio" [class.pos]="d.cambio > 0" [class.neg]="d.cambio < 0">
+                {{ d.cambio > 0 ? '+' : '' }}{{ d.cambio }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Heatmap + Forecast -->
+        <div class="right-col">
+
+          <!-- Heatmap -->
+          <div class="card-base heatmap-card">
+            <h2>Mapa de Calor</h2>
+            <p>Intensidad de actividad. Más oscuro = más detecciones.</p>
+            <div class="heatmap-grid">
+              <div
+                *ngFor="let cell of heatmapCells()"
+                class="heat-cell"
+                [class]="'heat-' + cell.intensity"
+                [title]="cell.fecha + ': ' + cell.personas + ' personas'">
+                <span>{{ cell.personas }}</span>
+              </div>
+            </div>
+            <div class="heatmap-legend">
+              <span>Menos</span>
+              <div class="heat-cell heat-0 small"></div>
+              <div class="heat-cell heat-1 small"></div>
+              <div class="heat-cell heat-2 small"></div>
+              <div class="heat-cell heat-3 small"></div>
+              <div class="heat-cell heat-4 small"></div>
+              <span>Más</span>
+            </div>
+          </div>
+
+          <!-- Forecast -->
+          <div class="card-base forecast-card" *ngIf="previsiones().length > 0">
+            <div class="forecast-header">
+              <h2>Previsión</h2>
+              <span class="forecast-badge">Proyección lineal</span>
+            </div>
+            <p>Estimación de los próximos 3 días basada en la tendencia histórica.</p>
+            <div class="forecast-grid">
+              <div *ngFor="let p of previsiones()" class="fc-item">
+                <div class="fc-day">+{{ p.dia }} día{{ p.dia > 1 ? 's' : '' }}</div>
+                <div class="fc-bar-wrap">
+                  <div class="fc-bar" [style.width.%]="maxPersonas() ? (p.valor / maxPersonas()) * 100 : 50"></div>
+                </div>
+                <strong class="fc-val">{{ p.valor | number }}</strong>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Empty state -->
+    <div *ngIf="!cargando() && !error() && dias().length === 0" class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <h2>Sin datos de tendencias</h2>
+      <p>No hay registros históricos suficientes para analizar tendencias.</p>
+    </div>
+  </div>
+</div>

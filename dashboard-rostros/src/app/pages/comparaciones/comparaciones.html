@@ -1,0 +1,264 @@
+<div class="page-shell">
+  <div class="page-wrapper">
+
+    <!-- HEADER -->
+    <header class="page-header">
+      <div>
+        <span class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Comparaciones
+        </span>
+        <h1>Análisis Comparativo de Períodos</h1>
+        <p>Selecciona dos rangos de fechas para comparar la actividad de detecciones, géneros y tendencias.</p>
+      </div>
+    </header>
+
+    <div *ngIf="cargando()" class="state-panel loading-panel">
+      <div class="spinner"></div> Cargando datos...
+    </div>
+    <div *ngIf="error()" class="state-panel error-panel">{{ error() }}</div>
+
+    <div *ngIf="!cargando() && !error()" class="page-grid">
+
+      <!-- ── RANGE SELECTORS ────────────────────────────────── -->
+      <section class="ranges-section">
+        <!-- Range A -->
+        <div class="range-card range-a">
+          <div class="range-head">
+            <div class="range-dot dot-a"></div>
+            <h3>Período A</h3>
+            <span class="range-count">{{ diasRangoA().length }} días</span>
+          </div>
+          <div class="range-inputs">
+            <div class="date-field">
+              <label>Desde</label>
+              <input type="date" [value]="rangoA().desde" (change)="onRangoADesde($event)">
+            </div>
+            <div class="range-arrow">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </div>
+            <div class="date-field">
+              <label>Hasta</label>
+              <input type="date" [value]="rangoA().hasta" (change)="onRangoAHasta($event)">
+            </div>
+          </div>
+          <!-- Summary -->
+          <div *ngIf="rangoACargado()" class="range-summary">
+            <div class="rs-item">
+              <span>Personas</span>
+              <strong>{{ totalesA().personas | number }}</strong>
+            </div>
+            <div class="rs-item">
+              <img src="/hombre.png" alt="H"><span>Hombres</span>
+              <strong class="val-blue">{{ totalesA().hombres | number }}</strong>
+            </div>
+            <div class="rs-item">
+              <img src="/mujer.png" alt="M"><span>Mujeres</span>
+              <strong class="val-pink">{{ totalesA().mujeres | number }}</strong>
+            </div>
+          </div>
+          <div *ngIf="!rangoACargado()" class="range-empty">Sin datos en este rango</div>
+        </div>
+
+        <!-- vs divider -->
+        <div class="vs-divider">
+          <span>VS</span>
+        </div>
+
+        <!-- Range B -->
+        <div class="range-card range-b">
+          <div class="range-head">
+            <div class="range-dot dot-b"></div>
+            <h3>Período B</h3>
+            <span class="range-count">{{ diasRangoB().length }} días</span>
+          </div>
+          <div class="range-inputs">
+            <div class="date-field">
+              <label>Desde</label>
+              <input type="date" [value]="rangoB().desde" (change)="onRangoBDesde($event)">
+            </div>
+            <div class="range-arrow">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </div>
+            <div class="date-field">
+              <label>Hasta</label>
+              <input type="date" [value]="rangoB().hasta" (change)="onRangoBHasta($event)">
+            </div>
+          </div>
+          <!-- Summary -->
+          <div *ngIf="rangoBCargado()" class="range-summary">
+            <div class="rs-item">
+              <span>Personas</span>
+              <strong>{{ totalesB().personas | number }}</strong>
+            </div>
+            <div class="rs-item">
+              <img src="/hombre.png" alt="H"><span>Hombres</span>
+              <strong class="val-blue">{{ totalesB().hombres | number }}</strong>
+            </div>
+            <div class="rs-item">
+              <img src="/mujer.png" alt="M"><span>Mujeres</span>
+              <strong class="val-pink">{{ totalesB().mujeres | number }}</strong>
+            </div>
+          </div>
+          <div *ngIf="!rangoBCargado()" class="range-empty">Sin datos en este rango</div>
+        </div>
+      </section>
+
+      <!-- ── COMPARISON METRICS ─────────────────────────────── -->
+      <section *ngIf="ambosCargados()" class="metrics-section">
+        <div *ngFor="let c of comparaciones()" class="cmp-card" [class.cmp-up]="c.positivo" [class.cmp-down]="!c.positivo">
+          <div class="cmp-label">{{ c.label }}</div>
+
+          <div class="cmp-values">
+            <div class="cmp-period">
+              <span class="period-tag tag-a">A</span>
+              <strong>{{ c.a | number }}</strong>
+            </div>
+            <div class="cmp-arrow" [class.arrow-up]="c.positivo" [class.arrow-down]="!c.positivo">
+              <svg *ngIf="c.positivo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+              <svg *ngIf="!c.positivo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+            </div>
+            <div class="cmp-period">
+              <span class="period-tag tag-b">B</span>
+              <strong>{{ c.b | number }}</strong>
+            </div>
+          </div>
+
+          <div class="cmp-delta" [class.delta-pos]="c.positivo" [class.delta-neg]="!c.positivo">
+            {{ c.positivo ? '+' : '' }}{{ c.diff | number }}
+            <small>({{ c.positivo ? '+' : '' }}{{ c.pct }}%)</small>
+          </div>
+
+          <!-- Bar chart comparison -->
+          <div class="cmp-bars">
+            <div class="cbar">
+              <div class="cbar-fill cbar-a" [style.width.%]="barWidth(c.a)"></div>
+              <span>{{ c.a | number }}</span>
+            </div>
+            <div class="cbar">
+              <div class="cbar-fill cbar-b" [style.width.%]="barWidth(c.b)"></div>
+              <span>{{ c.b | number }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── DAILY CHART (side-by-side bars) ───────────────── -->
+      <section *ngIf="ambosCargados()" class="daily-chart-section">
+        <div class="card-base">
+          <div class="card-header">
+            <div>
+              <h2>Actividad Diaria Comparada</h2>
+              <p>Hasta 7 días por período. Barras azules = Período A · Barras verdes = Período B.</p>
+            </div>
+            <div class="chart-legend">
+              <span class="legend-dot dot-a-color"></span> Período A
+              <span class="legend-dot dot-b-color" style="margin-left:12px"></span> Período B
+            </div>
+          </div>
+
+          <div *ngIf="chartDias().length > 0; else noChart" class="bar-chart">
+            <div *ngFor="let row of chartDias()" class="chart-col">
+              <div class="chart-bars">
+                <div class="chart-bar bar-a" [style.height.%]="barWidthDiario(row.diaA?.personas ?? 0)"
+                  [title]="row.diaA ? row.diaA.fecha + ': ' + row.diaA.personas : 'Sin dato'"></div>
+                <div class="chart-bar bar-b" [style.height.%]="barWidthDiario(row.diaB?.personas ?? 0)"
+                  [title]="row.diaB ? row.diaB.fecha + ': ' + row.diaB.personas : 'Sin dato'"></div>
+              </div>
+              <span class="chart-day">{{ 'Día ' + (row.i + 1) }}</span>
+            </div>
+          </div>
+          <ng-template #noChart>
+            <div class="no-data">No hay suficientes datos para el gráfico diario.</div>
+          </ng-template>
+        </div>
+      </section>
+
+      <!-- ── GENDER SPLIT COMPARISON ────────────────────────── -->
+      <section *ngIf="ambosCargados()" class="gender-compare-section">
+        <div class="card-base gender-split-card">
+          <div class="card-header">
+            <div>
+              <h2>Distribución de Género por Período</h2>
+              <p>Comparativa del peso de hombres y mujeres en cada período.</p>
+            </div>
+          </div>
+
+          <div class="gender-split-grid">
+            <!-- Period A gender split -->
+            <div class="gsplit-period">
+              <div class="gsplit-label-row">
+                <span class="period-badge badge-a">Período A</span>
+                <span>{{ diasRangoA().length }} días</span>
+              </div>
+              <div class="gsplit-bar-row">
+                <img src="/hombre.png" alt="H" class="gender-icon">
+                <div class="split-track">
+                  <div class="split-fill sf-blue" [style.width.%]="pctHombresA()"></div>
+                  <div class="split-fill sf-pink" [style.flex]="1"></div>
+                </div>
+                <img src="/mujer.png" alt="M" class="gender-icon">
+              </div>
+              <div class="gsplit-pcts">
+                <span class="pct-blue">{{ pctHombresA() }}% H</span>
+                <span class="pct-pink">M {{ pctMujeresA() }}%</span>
+              </div>
+              <div class="gsplit-counts">
+                <div class="gc"><strong>{{ totalesA().hombres | number }}</strong><small>Hombres</small></div>
+                <div class="gc"><strong>{{ totalesA().mujeres | number }}</strong><small>Mujeres</small></div>
+              </div>
+            </div>
+
+            <!-- Period B gender split -->
+            <div class="gsplit-period">
+              <div class="gsplit-label-row">
+                <span class="period-badge badge-b">Período B</span>
+                <span>{{ diasRangoB().length }} días</span>
+              </div>
+              <div class="gsplit-bar-row">
+                <img src="/hombre.png" alt="H" class="gender-icon">
+                <div class="split-track">
+                  <div class="split-fill sf-blue" [style.width.%]="pctHombresB()"></div>
+                  <div class="split-fill sf-pink" [style.flex]="1"></div>
+                </div>
+                <img src="/mujer.png" alt="M" class="gender-icon">
+              </div>
+              <div class="gsplit-pcts">
+                <span class="pct-blue">{{ pctHombresB() }}% H</span>
+                <span class="pct-pink">M {{ pctMujeresB() }}%</span>
+              </div>
+              <div class="gsplit-counts">
+                <div class="gc"><strong>{{ totalesB().hombres | number }}</strong><small>Hombres</small></div>
+                <div class="gc"><strong>{{ totalesB().mujeres | number }}</strong><small>Mujeres</small></div>
+              </div>
+            </div>
+
+            <!-- Days with most activity -->
+            <div class="gsplit-peak">
+              <h3>Pico de actividad</h3>
+              <div class="peak-row">
+                <div class="peak-item">
+                  <span class="period-badge badge-a">Período A</span>
+                  <strong>{{ diaConMasA().fecha }}</strong>
+                  <div class="peak-val">{{ diaConMasA().personas | number }} personas</div>
+                </div>
+                <div class="peak-item">
+                  <span class="period-badge badge-b">Período B</span>
+                  <strong>{{ diaConMasB().fecha }}</strong>
+                  <div class="peak-val">{{ diaConMasB().personas | number }} personas</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- No data state -->
+      <div *ngIf="!ambosCargados() && !cargando()" class="no-data-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        <h2>Selecciona rangos de fechas</h2>
+        <p>Elige dos períodos para ver la comparación detallada.</p>
+      </div>
+    </div>
+  </div>
+</div>

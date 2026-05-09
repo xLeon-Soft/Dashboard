@@ -310,27 +310,109 @@
 
 .social-row {
     display: flex;
-    gap: 16px;
+    gap: 14px;
     margin-bottom: 28px;
+    width: 100%;
 }
 
-.social-btn {
-    width: 52px;
+/* Base compartida para Google y Facebook */
+.google-signin-btn,
+.facebook-signin-btn {
+    flex: 1;
     height: 52px;
-    border-radius: 50%;
-    border: 0;
-    background: #4a8f6a;
-    color: #f9f9f7;
-    font-weight: 900;
-    font-size: 1.1rem;
+    border-radius: 999px;
+    border: 1.5px solid rgba(74, 143, 106, 0.18);
+    font-weight: 600;
+    font-size: 0.92rem;
     cursor: pointer;
-    transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
-    box-shadow: 0 10px 22px rgba(74, 143, 106, 0.14);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
-.social-btn:hover {
+/* Google */
+.google-signin-btn {
+    background: #ffffff;
+    color: #355442;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+.google-signin-btn:hover:not(:disabled) {
     transform: translateY(-2px);
-    filter: brightness(1.06);
+    box-shadow: 0 8px 24px rgba(66, 133, 244, 0.18);
+    border-color: rgba(66, 133, 244, 0.35);
+    background: #fafcff;
+}
+
+.google-signin-btn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Facebook */
+.facebook-signin-btn {
+    background: #1877F2;
+    color: #ffffff;
+    border-color: #1877F2;
+    box-shadow: 0 4px 14px rgba(24, 119, 242, 0.2);
+}
+
+.facebook-signin-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(24, 119, 242, 0.32);
+    background: #166fe5;
+    border-color: #166fe5;
+}
+
+.facebook-signin-btn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(24, 119, 242, 0.15);
+}
+
+.facebook-signin-btn .social-icon path {
+    fill: #ffffff;
+}
+
+/* Estados deshabilitados */
+.google-signin-btn:disabled,
+.facebook-signin-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* Iconos */
+.social-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+/* Spinners */
+.social-spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    animation: social-spin 0.7s linear infinite;
+    flex-shrink: 0;
+}
+
+.google-spinner {
+    border-color: rgba(66, 133, 244, 0.2);
+    border-top-color: #4285F4;
+}
+
+.facebook-spinner {
+    border-color: rgba(255, 255, 255, 0.3);
+    border-top-color: #ffffff;
+}
+
+@keyframes social-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .switch-line {

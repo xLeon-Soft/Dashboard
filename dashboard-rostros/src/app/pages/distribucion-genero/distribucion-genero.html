@@ -1,0 +1,327 @@
+<div class="page-shell">
+  <div class="page-wrapper">
+
+    <!-- ─── HEADER ─────────────────────────────────────────────────── -->
+    <header class="page-header">
+      <div class="header-text">
+        <span class="badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Distribución por Género
+        </span>
+        <h1>Balance de Detecciones</h1>
+        <p>Visualiza el peso de hombres y mujeres en el total de detecciones del sistema.</p>
+      </div>
+      <div class="header-actions">
+        <div class="refresh-pill">
+          <span class="refresh-dot"></span>
+          En tiempo real
+        </div>
+      </div>
+    </header>
+
+    <!-- ─── ALERTS ─────────────────────────────────────────────────── -->
+    <div *ngIf="cargando()" class="state-panel loading-panel">
+      <div class="state-spinner"></div>
+      <span>Cargando datos de distribución...</span>
+    </div>
+    <div *ngIf="error()" class="state-panel error-panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      {{ error() }}
+    </div>
+
+    <!-- ─── MAIN CONTENT ────────────────────────────────────────────── -->
+    <div *ngIf="!cargando() && !error()" class="page-grid">
+
+      <!-- Filter bar -->
+      <section class="filter-bar">
+        <button
+          class="view-btn"
+          [class.active]="vista() === 'total'"
+          (click)="verTotal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Total General
+        </button>
+
+        <div class="date-group">
+          <svg class="date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <input
+            type="date"
+            id="fecha-dist"
+            class="date-input"
+            [value]="fechaInputRaw()"
+            [disabled]="dias().length === 0"
+            (change)="onFechaSeleccionada($event)" />
+          <button
+            *ngIf="vista() === 'diaria'"
+            class="clear-btn"
+            (click)="verTotal()"
+            title="Limpiar filtro">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div *ngIf="vista() === 'diaria'" class="active-date-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          {{ fechaDisplay() || 'Fecha seleccionada' }}
+        </div>
+      </section>
+
+      <!-- ─── EMPTY STATE (date with no data) ──────────────────────── -->
+      <div *ngIf="vista() === 'diaria' && sinDatosEnFecha()" class="empty-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 15s1.5-2 4-2 4 2 4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+        </div>
+        <h2>Sin datos para esta fecha</h2>
+        <p>No se encontraron registros de detección para el <strong>{{ fechaDisplay() }}</strong>.</p>
+        <p class="hint">Fechas disponibles: {{ dias().length > 0 ? dias()[0].fecha + ' — ' + dias()[dias().length - 1].fecha : 'ninguna' }}</p>
+        <!-- Empty metric cards -->
+        <div class="empty-metrics">
+          <div class="empty-metric-card">
+            <span class="metric-label">Total personas</span>
+            <strong class="empty-val">—</strong>
+            <small>Sin registros</small>
+          </div>
+          <div class="empty-metric-card">
+            <span class="metric-label">Hombres</span>
+            <strong class="empty-val">—</strong>
+            <small>Sin registros</small>
+          </div>
+          <div class="empty-metric-card">
+            <span class="metric-label">Mujeres</span>
+            <strong class="empty-val">—</strong>
+            <small>Sin registros</small>
+          </div>
+          <div class="empty-metric-card">
+            <span class="metric-label">Eventos</span>
+            <strong class="empty-val">—</strong>
+            <small>Sin registros</small>
+          </div>
+        </div>
+        <button class="back-btn" (click)="verTotal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Volver al total general
+        </button>
+      </div>
+
+      <!-- ─── DATA (total or found date) ───────────────────────────── -->
+      <ng-container *ngIf="vista() === 'total' || (vista() === 'diaria' && !sinDatosEnFecha())">
+        <ng-container *ngIf="datosActivos() as datos">
+
+          <!-- KPI Cards -->
+          <section class="kpi-row">
+            <article class="kpi-card accent-blue">
+              <div class="kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <div class="kpi-body">
+                <span class="kpi-label">Total personas</span>
+                <strong>{{ datos.personas | number }}</strong>
+                <small *ngIf="vista() === 'diaria'">{{ fechaDisplay() }}</small>
+                <small *ngIf="vista() === 'total'">Historial completo</small>
+              </div>
+            </article>
+
+            <article class="kpi-card accent-indigo">
+              <div class="kpi-icon">
+                <img src="/hombre.png" alt="Hombre" style="width:26px;filter:brightness(0) invert(1)">
+              </div>
+              <div class="kpi-body">
+                <span class="kpi-label">Hombres</span>
+                <strong>{{ datos.hombres | number }}</strong>
+                <small>{{ porcentajeHombres() }}% del total</small>
+              </div>
+              <div class="kpi-progress">
+                <div class="kpi-bar" [style.width.%]="porcentajeHombres()"></div>
+              </div>
+            </article>
+
+            <article class="kpi-card accent-pink">
+              <div class="kpi-icon">
+                <img src="/mujer.png" alt="Mujer" style="width:26px;filter:brightness(0) invert(1)">
+              </div>
+              <div class="kpi-body">
+                <span class="kpi-label">Mujeres</span>
+                <strong>{{ datos.mujeres | number }}</strong>
+                <small>{{ porcentajeMujeres() }}% del total</small>
+              </div>
+              <div class="kpi-progress kpi-progress-pink">
+                <div class="kpi-bar" [style.width.%]="porcentajeMujeres()"></div>
+              </div>
+            </article>
+
+            <article class="kpi-card accent-teal">
+              <div class="kpi-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              </div>
+              <div class="kpi-body">
+                <span class="kpi-label">Eventos</span>
+                <strong>{{ datos.eventos | number }}</strong>
+                <small>Registros de actividad</small>
+              </div>
+            </article>
+          </section>
+
+          <!-- Chart + Summary -->
+          <section class="chart-row">
+
+            <!-- Donut + bars -->
+            <article class="card-base chart-card">
+              <div class="card-header">
+                <div>
+                  <h2>Distribución por género</h2>
+                  <p *ngIf="vista() === 'total'">Comparativa en porcentajes y valores absolutos.</p>
+                  <p *ngIf="vista() === 'diaria'">Datos del <strong>{{ fechaDisplay() }}</strong></p>
+                </div>
+                <span class="tag" [class.tag-date]="vista()==='diaria'">
+                  {{ vista() === 'total' ? 'Total general' : fechaDisplay() }}
+                </span>
+              </div>
+
+              <div class="gender-chart">
+                <!-- Donut SVG -->
+                <div class="donut-wrap">
+                  <svg viewBox="0 0 120 120" class="donut">
+                    <!-- Mujeres arc -->
+                    <circle
+                      cx="60" cy="60" r="30"
+                      class="donut-mujeres"
+                      [attr.stroke-dasharray]="donutDash(porcentajeMujeres())"
+                      [attr.stroke-dashoffset]="0"
+                      transform="rotate(-90 60 60)"
+                      (mouseenter)="onSliceHover($event, 'mujeres')"
+                      (mousemove)="onSliceMove($event)"
+                      (mouseleave)="onSliceLeave()"
+                      style="cursor: pointer;"/>
+                    <!-- Hombres arc on top -->
+                    <circle
+                      cx="60" cy="60" r="30"
+                      class="donut-hombres"
+                      [attr.stroke-dasharray]="donutDash(porcentajeHombres())"
+                      [attr.stroke-dashoffset]="-(donutDash(porcentajeMujeres()).split(' ')[0])"
+                      transform="rotate(-90 60 60)"
+                      (mouseenter)="onSliceHover($event, 'hombres')"
+                      (mousemove)="onSliceMove($event)"
+                      (mouseleave)="onSliceLeave()"
+                      style="cursor: pointer;"/>
+                      
+                    <!-- Labels inside pie chart -->
+                    <text *ngIf="labelCoordsMujeres() as coords" [attr.x]="coords.x" [attr.y]="coords.y" class="pie-label" dominant-baseline="central" text-anchor="middle" pointer-events="none">{{ porcentajeMujeres() }}%</text>
+                    <text *ngIf="labelCoordsHombres() as coords" [attr.x]="coords.x" [attr.y]="coords.y" class="pie-label" dominant-baseline="central" text-anchor="middle" pointer-events="none">{{ porcentajeHombres() }}%</text>
+                  </svg>
+
+                  <!-- Tooltip -->
+                  <div *ngIf="hoveredSlice()" 
+                       class="pie-tooltip" 
+                       [style.left.px]="mouseX()" 
+                       [style.top.px]="mouseY()">
+                       <strong>{{ hoveredSlice() | titlecase }}</strong>
+                       <span>{{ hoveredSlice() === 'hombres' ? porcentajeHombres() : porcentajeMujeres() }}%</span>
+                  </div>
+                </div>
+
+                <!-- Legend bars -->
+                <div class="gender-bars">
+                  <div class="gender-bar-item">
+                    <div class="bar-head">
+                      <div class="bar-label-row">
+                        <img src="/hombre.png" alt="H" class="gender-icon">
+                        <span>Hombres</span>
+                      </div>
+                      <strong>{{ datos.hombres | number }}</strong>
+                    </div>
+                    <div class="bar-track">
+                      <div class="bar-fill fill-blue" [style.width.%]="porcentajeHombres()">
+                        <span class="bar-pct">{{ porcentajeHombres() }}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="gender-bar-item">
+                    <div class="bar-head">
+                      <div class="bar-label-row">
+                        <img src="/mujer.png" alt="M" class="gender-icon">
+                        <span>Mujeres</span>
+                      </div>
+                      <strong>{{ datos.mujeres | number }}</strong>
+                    </div>
+                    <div class="bar-track">
+                      <div class="bar-fill fill-pink" [style.width.%]="porcentajeMujeres()">
+                        <span class="bar-pct">{{ porcentajeMujeres() }}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Dominance indicator -->
+                  <div class="dominance-bar">
+                    <span class="dom-label dom-blue">{{ porcentajeHombres() }}% H</span>
+                    <div class="dom-track">
+                      <div class="dom-fill" [style.width.%]="porcentajeHombres()"></div>
+                    </div>
+                    <span class="dom-label dom-pink">M {{ porcentajeMujeres() }}%</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- Summary details -->
+            <article class="card-base summary-card">
+              <h2>Detalles del período</h2>
+              <p *ngIf="vista() === 'total'">Resumen completo del historial de detecciones del sistema.</p>
+              <p *ngIf="vista() === 'diaria'">Detalle de las detecciones del día seleccionado.</p>
+
+              <div class="detail-grid">
+                <div class="detail-block" [class.block-blue]="true">
+                  <span>Participación Masculina</span>
+                  <strong>{{ porcentajeHombres() }}%</strong>
+                </div>
+                <div class="detail-block" [class.block-pink]="true">
+                  <span>Participación Femenina</span>
+                  <strong>{{ porcentajeMujeres() }}%</strong>
+                </div>
+                <div class="detail-block">
+                  <span>Eventos registrados</span>
+                  <strong>{{ datos.eventos | number }}</strong>
+                </div>
+                <div class="detail-block">
+                  <span>Diferencia de género</span>
+                  <strong>{{ diferencia() }}%</strong>
+                </div>
+                <div class="detail-block" style="grid-column: 1/-1;">
+                  <span>Género dominante</span>
+                  <strong>{{ dominante() }}</strong>
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <!-- Day selector timeline -->
+          <section *ngIf="dias().length > 0" class="timeline-section">
+            <div class="timeline-header">
+              <h3>Historial de días</h3>
+              <span class="timeline-count">{{ dias().length }} registros</span>
+            </div>
+            <div class="days-grid">
+              <button
+                *ngFor="let dia of dias()"
+                (click)="seleccionarDia(dia)"
+                [class.selected]="esDiaSeleccionado(dia)"
+                class="day-card">
+                <div class="day-gender-bar">
+                  <div class="dgb-h" [style.flex]="dia.hombres"></div>
+                  <div class="dgb-m" [style.flex]="dia.mujeres"></div>
+                </div>
+                <span class="day-date">{{ dia.fecha }}</span>
+                <strong>{{ dia.personas | number }}</strong>
+                <div class="day-breakdown">
+                  <span class="br-h">{{ dia.hombres }}H</span>
+                  <span class="br-m">{{ dia.mujeres }}M</span>
+                </div>
+              </button>
+            </div>
+          </section>
+
+        </ng-container>
+      </ng-container>
+    </div>
+  </div>
+</div>
